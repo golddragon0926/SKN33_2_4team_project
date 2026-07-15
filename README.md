@@ -81,6 +81,7 @@ project/
 ├── tests/
 │   └── test_inference.py      # 저장된 모델 파일을 로드하여 유효성을 검증하는 예측 스크립트
 └── presentation.pdf
+```
 
 ---
 
@@ -94,7 +95,7 @@ project/
 
 ---
 
-## 💻 6. 사용 방법 (How to Run)
+## 💻 6. 사용 방법 (How to Run) ##
 - **① 원격 저장소 클론 및 가상환경 설정**
 ```
 git clone [https://github.com/](https://github.com/)[우리저장소주소].git
