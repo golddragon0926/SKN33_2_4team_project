@@ -20,5 +20,5 @@ __pycache__/
 .env
 
 
-models/
+modeling/
 catboost_info/
