@@ -1,0 +1,11 @@
+{
+  "model": "dummy",
+  "role": "baseline",
+  "strategy": "constant_train_prior",
+  "train_rows": 11684,
+  "feature_count": 37,
+  "train_positive_rate": 0.09714138993495379,
+  "tuned": false,
+  "eligible_for_champion": false,
+  "note": "비학습 기준선. Feature를 사용하지 않으며 모든 고객에게 Train 전체 churn 비율을 동일 확률로 부여."
+}

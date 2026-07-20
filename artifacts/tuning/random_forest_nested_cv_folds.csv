@@ -1,0 +1,6 @@
+﻿fold,inner_best_pr_auc,outer_valid_pr_auc,outer_valid_roc_auc,best_params
+1,0.26943675735396205,0.2784279142624966,0.7009562185523102,"{""class_weight"": ""balanced_subsample"", ""max_depth"": null, ""max_features"": 0.5, ""min_samples_leaf"": 2, ""min_samples_split"": 5, ""n_estimators"": 700}"
+2,0.23401807119697948,0.2941791596315179,0.6962920433430069,"{""class_weight"": null, ""max_depth"": null, ""max_features"": 0.5, ""min_samples_leaf"": 5, ""min_samples_split"": 10, ""n_estimators"": 500}"
+3,0.255581908344973,0.27585601642729285,0.7129444432845481,"{""class_weight"": ""balanced_subsample"", ""max_depth"": 16, ""max_features"": 0.5, ""min_samples_leaf"": 10, ""min_samples_split"": 5, ""n_estimators"": 500}"
+4,0.2529226687533302,0.26661363787151193,0.6954443910892123,"{""class_weight"": null, ""max_depth"": null, ""max_features"": ""sqrt"", ""min_samples_leaf"": 2, ""min_samples_split"": 2, ""n_estimators"": 500}"
+5,0.24537725098895868,0.2919093926634935,0.7039779171705904,"{""class_weight"": null, ""max_depth"": null, ""max_features"": 0.5, ""min_samples_leaf"": 1, ""min_samples_split"": 2, ""n_estimators"": 300}"

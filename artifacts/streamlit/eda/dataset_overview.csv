@@ -1,0 +1,10 @@
+﻿metric,value
+client_rows,14606.0
+client_columns,26.0
+price_rows,193002.0
+price_columns,8.0
+unique_customers,14606.0
+train_customers,11684.0
+test_customers,2922.0
+overall_churn_rate,0.09715185540188963
+a0_feature_count,25.0

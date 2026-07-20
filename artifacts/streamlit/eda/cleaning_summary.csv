@@ -1,0 +1,8 @@
+﻿항목,값
+수동 제외 컬럼,margin_gross_pow_ele
+Train에서 탐지된 정확한 중복 컬럼,없음
+삭제한 Train 고객 행,0
+최종 Feature 수,25
+수치형 Feature 수,22
+범주형 Feature 수,3
+Train NaN 셀 수,212

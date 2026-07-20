@@ -1,98 +1,127 @@
-import streamlit as st
-import pandas as pd
-import os
+from pathlib import Path
 
-# 1. 페이지 기본 설정 (무조건 가장 상단에 위치)
+import pandas as pd
+import streamlit as st
+
+
+APP_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = APP_DIR.parent
+EDA_DIR = PROJECT_ROOT / "artifacts" / "streamlit" / "eda"
+MODEL_DIR = PROJECT_ROOT / "artifacts" / "streamlit" / "modeling"
+
 st.set_page_config(
-    page_title="PowerCo Churn Hub",
-    page_icon="🏢",
-    layout="wide"
+    page_title="PowerCo Churn Insight",
+    page_icon="⚡",
+    layout="wide",
 )
 
-# ─── 💡 Train/Test 정제 데이터를 합쳐서 KPI를 계산하는 함수 ───
+st.markdown(
+    """
+    <style>
+    .block-container {padding-top: 2rem; padding-bottom: 3rem; max-width: 1400px;}
+    [data-testid="stMetric"] {
+        background: #ffffff;
+        border: 1px solid #e6eaf0;
+        border-radius: 14px;
+        padding: 14px 16px;
+    }
+    [data-testid="stMetricLabel"] {color: #5b6573;}
+    [data-testid="stMetricValue"] {color: #17324d;}
+    .insight-box {
+        border-left: 4px solid #f59e0b;
+        background: #fffaf0;
+        padding: 14px 16px;
+        border-radius: 8px;
+        margin: 8px 0 14px 0;
+    }
+    .subtle-box {
+        border: 1px solid #e6eaf0;
+        background: #f8fafc;
+        padding: 14px 16px;
+        border-radius: 10px;
+        margin: 8px 0 14px 0;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 @st.cache_data
-def get_combined_kpi():
-    train_path = "data/processed/train.csv"
-    test_path = "data/processed/test.csv"
-
-    # 1. 필수 데이터 파일 존재 여부 검사 (없으면 즉시 명시적 예외 발생)
-    if not os.path.exists(train_path):
-        raise FileNotFoundError(f"⚠️ 필수 데이터 파일이 없습니다.\n경로를 확인하세요: {train_path}")
-
-    # 2. 데이터 병합 및 로드 (파일이 깨졌거나 형식이 다르면 판다스가 예외 발생시킴)
-    if os.path.exists(test_path):
-        df_train = pd.read_csv(train_path)
-        df_test = pd.read_csv(test_path)
-        df_total = pd.concat([df_train, df_test], ignore_index=True)
-    else:
-        df_total = pd.read_csv(train_path)
-
-    # 3. 전체 SME 고객 수 계산
-    total_customers = len(df_total)
-
-    # 4. 평균 이탈률 계산
-    churn_col = 'churn'
-    if churn_col not in df_total.columns:
-        raise KeyError(f"⚠️ 데이터셋 내에 이탈 여부를 나타내는 필수 컬럼('{churn_col}')이 존재하지 않습니다.")
-
-    churn_rate = df_total[churn_col].mean() * 100
-
-    return total_customers, churn_rate
-# ────────────────────────────────────────────────────────────
+def load_csv(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        raise FileNotFoundError(str(path))
+    return pd.read_csv(path)
 
 
-# 2. 메인 홈 화면에 들어갈 핵심 내용을 함수로 정의
-def show_home():
-    st.title("🏢 PowerCo SME 고객 이탈 방지 AI 시스템")
-    st.markdown("---")
+def metric_value(df: pd.DataFrame, metric: str, default=None):
+    matched = df.loc[df["metric"] == metric, "value"]
+    return matched.iloc[0] if not matched.empty else default
 
-    st.markdown("""
-    ### 📊 프로젝트 개요
-    유럽 에너지 시장 자유화 이후 경쟁사들의 공세로 인해 **PowerCo의 핵심 수익원인 중소기업(SME) 고객층에서 매년 약 9.7%의 이탈(Churn)**이 발생하고 있습니다.
 
-    본 시스템은 PowerCo 리테일 영업팀이 계약 갱신 직전의 이탈 위험 고객을 선제적으로 감지하고, 맞춤형 유지 전략(할인 요금제 제안 및 전담 관리)을 펼칠 수 있도록 데이터를 기반으로 지원합니다.
-    """)
+def show_home() -> None:
+    st.title("⚡ PowerCo 고객 이탈 분석")
+    st.write(
+        "데이터에서 이탈 패턴을 찾고, 여러 모델을 비교한 뒤, "
+        "실제 유지관리 대상 고객을 우선순위화하는 과정을 한 화면에서 확인합니다."
+    )
 
-    # ─── 💡 정제 데이터 기반 실시간 연산 및 예외 처리 안전장치 ───
     try:
-        total_cust, avg_churn = get_combined_kpi()
-    except Exception as e:
-        st.error("🚨 홈 화면 데이터를 불러오는 중 치명적인 오류가 발생했습니다.")
-        st.exception(e)  # 화면에 에러 트레이스백(Traceback)을 깔끔하게 출력
-        st.stop()       # 아래쪽 KPI 및 UI 코드가 실행되지 않도록 강제 중단
-    # ───────────────────────────────────────────────────────────
+        overview = load_csv(EDA_DIR / "dataset_overview.csv")
+        champion = load_csv(MODEL_DIR / "champion_summary.csv").iloc[0]
 
-    # 핵심 비즈니스 지표 요약 (KPI Metrics)
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric(label="분석 대상 SME 고객 수", value=f"{total_cust:,} 명")
-    with col2:
-        st.metric(label="평균 이탈률 (Baseline)", value=f"{avg_churn:.1f} %")
-    with col3:
-        st.metric(label="AI 방어 시 예상 유지율", value="최대 85%")
+        total_customers = int(float(metric_value(overview, "unique_customers", 0)))
+        churn_rate = float(metric_value(overview, "overall_churn_rate", 0))
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("분석 고객", f"{total_customers:,}명")
+        c2.metric("전체 이탈률", f"{churn_rate:.1%}")
+        c3.metric("최종 모델", str(champion["display_name"]))
+        c4.metric("Top 10% Lift", f"{float(champion['test_top10_lift']):.2f}배")
+    except Exception:
+        st.info(
+            "아직 Streamlit용 결과 CSV가 생성되지 않았습니다. "
+            "전처리와 평가 코드를 실행한 뒤 다시 열어주세요."
+        )
+        st.code(
+            "python preprocessing/data_preprocessing.py\n"
+            "python preprocessing/preprocessing_plus.py\n"
+            "python modeling/evaluate.py",
+            language="bash",
+        )
 
     st.markdown("---")
+    st.subheader("이 대시보드에서 보는 순서")
 
-    # 사용자를 위한 내비게이션 안내 가이드
-    st.info("""
-    💡 **사용 안내:** 왼쪽 사이드바의 메뉴를 이용하여 페이지를 이동할 수 있습니다.
-    * **📊 Dashboard**: 전체 SME 고객 및 가스 동시 사용 분포, 요금 변동 추이 현황을 확인합니다.
-    * **🤖 Model Performance**: 머신러닝 모델의 최종 검증 리포트 및 영업팀용 임계값(Threshold) 시뮬레이터를 제공합니다.
-    * **🎯 Realtime Prediction**: 특정 고객 ID 조회를 통해 실시간 이탈 위험도 예측 및 맞춤형 영업 가이드를 확인합니다.
-    """)
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown("### 1️⃣ 고객 데이터 인사이트")
+        st.write(
+            "모델을 돌리기 전에 컬럼별 분포와 이탈률을 비교해 "
+            "어떤 고객 특성에서 차이가 보이는지 확인합니다."
+        )
+    with c2:
+        st.markdown("### 2️⃣ 모델 · 유지전략")
+        st.write(
+            "여러 모델의 성능을 비교하고, 실제로 상위 몇 % 고객을 관리할 때 "
+            "얼마나 많은 이탈 고객을 포착하는지 확인합니다."
+        )
+    with c3:
+        st.markdown("### 3️⃣ 고객 위험 분석")
+        st.write(
+            "특정 고객의 위험도 순위와 모델이 중요하게 본 요인을 확인해 "
+            "어떤 항목을 먼저 점검할지 살펴봅니다."
+        )
 
 
-# 3. 공식 내비게이션 구성 (딕셔너리 구조로 섹션 분리)
-pg = st.navigation({
-    "📌 𝗠𝗔𝗜𝗡 𝗠𝗘𝗡𝗨": [
-        st.Page(show_home, title="PowerCo AI 홈", icon="🏠")
-    ],
-    "🚀 𝗔𝗡𝗔𝗟𝗬𝗧𝗜𝗖𝗦 & 𝗣𝗥𝗘𝗗𝗜𝗖𝗧𝗜𝗢𝗡": [
-        st.Page("pages/1_Dashboard.py", title="Dashboard", icon="📊"),
-        st.Page("pages/2_Model_Performance.py", title="Model Performance", icon="🤖"),
-        st.Page("pages/3_Realtime_Prediction.py", title="Realtime Prediction", icon="🎯"),
-    ]
-})
-
-# 4. 내비게이션 실행
+pg = st.navigation(
+    {
+        "MAIN": [st.Page(show_home, title="홈", icon="🏠")],
+        "ANALYSIS": [
+            st.Page("pages/1_Dashboard.py", title="고객 데이터 인사이트", icon="📊"),
+            st.Page("pages/2_Model_Performance.py", title="모델 · 유지전략", icon="🤖"),
+            st.Page("pages/3_Realtime_Prediction.py", title="고객 위험 분석", icon="🎯"),
+        ],
+    }
+)
 pg.run()

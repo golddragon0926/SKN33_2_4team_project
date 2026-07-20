@@ -1,0 +1,8 @@
+﻿점검 항목,값
+Train 전체 행 중복,0
+Test 전체 행 중복,0
+Train ID 중복,0
+Test ID 중복,0
+Train/Test ID 교집합,0
+Train 무한대 셀,0
+Test 무한대 셀,0

@@ -1,0 +1,3 @@
+﻿metric,A0,A3,relative_improvement_pct,note
+OOF PR-AUC,0.27547,0.317581,15.3,동일 무가중치 LightGBM Feature 통제 실험
+Top10 Lift,2.932415,3.337493,13.8,동일 무가중치 LightGBM Feature 통제 실험
