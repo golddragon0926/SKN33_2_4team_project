@@ -10,6 +10,11 @@ try:
     from data_preprocessing import binary_with_missing, safe_ratio
 except ImportError:
     from preprocessing.data_preprocessing import binary_with_missing, safe_ratio
+
+try:
+    from streamlit_exports import export_a3_eda_artifacts
+except ImportError:
+    from preprocessing.streamlit_exports import export_a3_eda_artifacts
 ID_COL = "id"
 TARGET_COL = "churn"
 MODEL_REFERENCE_DATE = pd.Timestamp("2016-01-01")
@@ -310,6 +315,16 @@ def run_preprocessing_plus(
         test_plus.to_csv(interim_test_path, index=False, encoding="utf-8-sig")
         train_plus.to_csv(processed_train_path, index=False, encoding="utf-8-sig")
         test_plus.to_csv(processed_test_path, index=False, encoding="utf-8-sig")
+
+        streamlit_dir = export_a3_eda_artifacts(
+            project_root=loaded["project_root"],
+            baseline_train=baseline_train,
+            train_plus=train_plus,
+            test_plus=test_plus,
+            plus_feature_cols=PLUS_FEATURE_COLS,
+        )
+        print(f"Streamlit A3 EDA 데이터 저장 완료: {streamlit_dir}")
+
     output_summary = pd.DataFrame(
         {
             "구분": ["중간 보관", "중간 보관", "최종 모델링", "최종 모델링"],
