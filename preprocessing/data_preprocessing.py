@@ -8,6 +8,11 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
+try:
+    from streamlit_exports import export_base_eda_artifacts
+except ImportError:
+    from preprocessing.streamlit_exports import export_base_eda_artifacts
+
 TARGET_COL = "churn"
 ID_COL = "id"
 CLIENT_DATE_COLS = ["date_activ", "date_end", "date_modif_prod", "date_renewal"]
@@ -602,6 +607,11 @@ def run_preprocessing(
         processed_dir=processed_dir,
         export=export,
     )
+
+    if export:
+        streamlit_dir = export_base_eda_artifacts(raw, built)
+        print(f"Streamlit EDA 데이터 저장 완료: {streamlit_dir}")
+
     return {**raw, **built}
 
 

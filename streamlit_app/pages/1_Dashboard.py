@@ -1,109 +1,306 @@
-import streamlit as st
+from pathlib import Path
+
+import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import os
-
-# 1. 페이지 설정
-st.set_page_config(page_title="고객 현황", page_icon="📊", layout="wide")
-st.title("📊 PowerCo 리테일 고객 현황 대시보드")
-
-# 한글 깨짐 방지 설정
-plt.rcParams['font.family'] = 'sans-serif'
-plt.rcParams['axes.unicode_minus'] = False
+import plotly.express as px
+import plotly.graph_objects as go
+import streamlit as st
 
 
-# ─── 💡 실제 CSV 정제 데이터를 로드하고 합치는 함수 ───
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+EDA_DIR = PROJECT_ROOT / "artifacts" / "streamlit" / "eda"
+NAVY = "#17324d"
+ORANGE = "#f59e0b"
+LIGHT = "#d9e2ec"
+
+
 @st.cache_data
-def load_real_data():
-    train_path = "data/processed/train.csv"
-    test_path = "data/processed/test.csv"
-
-    # 1. 파일 존재 여부 검사 (없으면 즉시 명시적 예외 발생)
-    if not os.path.exists(train_path):
-        raise FileNotFoundError(f"⚠️ 필수 데이터 파일이 없습니다.\n경로를 확인하세요: {train_path}")
-
-    # 2. 데이터 병합 및 로드 (이 과정에서 깨진 파일 등 문제 생기면 판다스가 알아서 Exception 발생시킴)
-    if os.path.exists(test_path):
-        df_train = pd.read_csv(train_path)
-        df_test = pd.read_csv(test_path)
-        return pd.concat([df_train, df_test], ignore_index=True)
-    else:
-        return pd.read_csv(train_path)
+def load_csv(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        raise FileNotFoundError(
+            f"필수 파일이 없습니다: {path}\n"
+            "전처리 코드를 먼저 실행해 Streamlit용 EDA CSV를 생성하세요."
+        )
+    return pd.read_csv(path)
 
 
-# 💡 데이터 로드 (함수 내부에서 Exception이 발생하면 Streamlit 화면에 붉은 에러 창과 에러 내용이 바로 찍힙니다)
+def metric_value(df: pd.DataFrame, metric: str, default=None):
+    matched = df.loc[df["metric"] == metric, "value"]
+    return matched.iloc[0] if not matched.empty else default
+
+
+def style_chart(fig, height: int = 390):
+    fig.update_layout(
+        height=height,
+        margin=dict(l=20, r=20, t=45, b=20),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(size=13),
+        legend_title_text="",
+    )
+    fig.update_xaxes(showgrid=False)
+    fig.update_yaxes(gridcolor="#edf1f5")
+    return fig
+
+
+def profile_insight(profile: pd.DataFrame, overall_rate: float) -> str:
+    valid = profile.loc[profile["customer_count"] >= 30].copy()
+    if valid.empty:
+        valid = profile.copy()
+    high = valid.loc[valid["churn_rate"].idxmax()]
+    low = valid.loc[valid["churn_rate"].idxmin()]
+    delta = (float(high["churn_rate"]) - overall_rate) * 100
+    return (
+        f"관찰된 이탈률이 가장 높은 구간은 **{high['bucket']}** "
+        f"({float(high['churn_rate']):.1%}, n={int(high['customer_count']):,})입니다. "
+        f"전체 이탈률과 비교하면 **{delta:+.1f}%p** 차이입니다. "
+        f"가장 낮은 구간은 **{low['bucket']}** ({float(low['churn_rate']):.1%})입니다."
+    )
+
+
+def plot_profile(profile: pd.DataFrame, overall_rate: float, title: str):
+    plot_df = profile.sort_values("bucket_order").copy()
+    plot_df["churn_pct"] = plot_df["churn_rate"] * 100
+    fig = px.bar(
+        plot_df,
+        x="bucket",
+        y="churn_pct",
+        text="churn_pct",
+        custom_data=["range_label", "customer_count", "churn_count"],
+        title=title,
+        labels={"bucket": "", "churn_pct": "이탈률 (%)"},
+    )
+    fig.update_traces(
+        marker_color=NAVY,
+        texttemplate="%{text:.1f}%",
+        textposition="outside",
+        hovertemplate=(
+            "%{x}<br>값 범위: %{customdata[0]}<br>고객 수: %{customdata[1]:,}명"
+            "<br>이탈 고객: %{customdata[2]:,}명<br>이탈률: %{y:.1f}%<extra></extra>"
+        ),
+    )
+    fig.add_hline(
+        y=overall_rate * 100,
+        line_dash="dash",
+        line_color=ORANGE,
+        annotation_text=f"전체 {overall_rate:.1%}",
+    )
+    return style_chart(fig)
+
+
+st.title("📊 고객 데이터 인사이트")
+st.caption(
+    "모델 결과를 사용하지 않고, Train 데이터를 기준으로 컬럼별 이탈 패턴을 먼저 살펴봅니다. "
+    "그래프는 원인 증명이 아니라 모델링 전에 발견한 연관 패턴입니다."
+)
+
 try:
-    df = load_real_data()
-except Exception as e:
-    st.error("🚨 대시보드 데이터를 불러오는 중 치명적인 오류가 발생했습니다.")
-    st.exception(e)  # 화면에 에러 트레이스백(Traceback)을 깔끔하게 출력해주는 함수
-    st.stop()  # 더 이상 아래쪽 UI 코드가 실행되지 않도록 강제 중단
-# ───────────────────────────────────────────────────
-
-churn_col = 'churn'
-gas_col = 'has_gas'
-
-# 필수 컬럼 존재 여부 확인
-if churn_col not in df.columns or gas_col not in df.columns:
-    st.error(f"🚨 데이터셋 내에 필수 컬럼('{churn_col}' 또는 '{gas_col}')이 존재하지 않습니다.")
+    overview = load_csv(EDA_DIR / "dataset_overview.csv")
+    a3_overview = load_csv(EDA_DIR / "a3_overview.csv")
+    churn = load_csv(EDA_DIR / "churn_distribution.csv")
+    profiles = load_csv(EDA_DIR / "feature_churn_profile.csv")
+    catalog = load_csv(EDA_DIR / "feature_catalog.csv")
+    risk_matrix = load_csv(EDA_DIR / "risk_segment_matrix.csv")
+    missing = load_csv(EDA_DIR / "a3_missing_values.csv")
+    flow = load_csv(EDA_DIR / "preprocessing_flow.csv")
+except Exception as exc:
+    st.error("EDA 시각화용 결과를 불러오지 못했습니다.")
+    st.exception(exc)
     st.stop()
 
-# ─── 💡 실시간 인사이트 반영을 위한 통계 데이터 사전 연산 ───
-calc_churn_rate = df[churn_col].mean() * 100
+customer_count = int(float(metric_value(overview, "unique_customers", 0)))
+train_count = int(float(metric_value(overview, "train_customers", 0)))
+price_rows = int(float(metric_value(overview, "price_rows", 0)))
+overall_rate = float(metric_value(overview, "overall_churn_rate", 0))
 
-gas_rates = df[gas_col].value_counts(normalize=True) * 100
-false_key = 'f' if 'f' in gas_rates.index else 0
-calc_no_gas_rate = gas_rates.get(false_key, 0.0)
-# ─────────────────────────────────────────────────────────
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("전체 고객", f"{customer_count:,}명")
+c2.metric("컬럼 분석 기준", f"Train {train_count:,}명")
+c3.metric("전체 이탈률", f"{overall_rate:.1%}")
+c4.metric("월별 가격 기록", f"{price_rows:,}건")
 
-# 데이터 가독성을 위해 매핑 (그래프 라벨용)
-df['status_label'] = df[churn_col].map({0: '유지', 1: '이탈'})
+st.markdown("---")
+st.subheader("1. 먼저 확인한 것: 이탈 고객은 얼마나 많은가?")
+left, right = st.columns([1.25, 1])
+with left:
+    churn_plot = churn.copy()
+    churn_plot["rate_pct"] = churn_plot["rate"] * 100
+    fig = px.bar(
+        churn_plot,
+        x="label",
+        y="rate_pct",
+        text="rate_pct",
+        labels={"label": "", "rate_pct": "고객 비중 (%)"},
+    )
+    fig.update_traces(
+        marker_color=[NAVY, ORANGE],
+        texttemplate="%{text:.1f}%",
+        textposition="outside",
+    )
+    st.plotly_chart(style_chart(fig, 340), use_container_width=True)
+with right:
+    st.markdown(
+        f"""
+        <div class="insight-box">
+        <b>왜 중요한가?</b><br><br>
+        전체 고객 중 이탈 고객은 약 <b>{overall_rate:.1%}</b>입니다.<br>
+        유지 고객이 훨씬 많기 때문에 단순 정확도만 보면 모델 성능을 과대평가할 수 있습니다.<br><br>
+        따라서 이후 모델 비교에서는 <b>PR-AUC</b>를 핵심 지표로 사용하고,
+        실제 운영에서는 <b>고위험 고객을 얼마나 잘 우선 선별하는지</b>를 함께 봅니다.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-# 2단 레이아웃 구성
-col1, col2 = st.columns(2)
+st.markdown("---")
+st.subheader("2. 컬럼별로 어떤 이탈 패턴이 보였나?")
+st.write(
+    "보고 싶은 컬럼을 선택하면 값이 낮은 고객부터 높은 고객까지 구간을 나눠 이탈률을 비교합니다. "
+    "범주형 컬럼은 범주별로 비교합니다."
+)
 
-with col1:
-    st.subheader("🎯 전체 고객 이탈 여부 분포")
+group_order = ["고객 특성", "소비·수익", "계약 생애주기", "변화 신호"]
+available_groups = [g for g in group_order if g in catalog["feature_group"].unique()]
+selected_group = st.radio(
+    "분석 주제",
+    available_groups,
+    horizontal=True,
+    label_visibility="collapsed",
+)
 
-    counts = df['status_label'].value_counts()
-    rates = df['status_label'].value_counts(normalize=True) * 100
+group_catalog = catalog.loc[catalog["feature_group"] == selected_group].copy()
+label_to_feature = dict(zip(group_catalog["feature_label"], group_catalog["feature"]))
+selected_label = st.selectbox("확인할 컬럼", list(label_to_feature))
+selected_feature = label_to_feature[selected_label]
+selected_profile = profiles.loc[profiles["feature"] == selected_feature].copy()
+selected_description = group_catalog.loc[
+    group_catalog["feature"] == selected_feature, "description"
+].iloc[0]
 
-    fig, ax = plt.subplots(figsize=(5, 3.5))
-    bars = ax.bar(counts.index, counts.values, color=['#1f77b4', '#ff7f0e'])
-    ax.set_ylabel("고객 수")
-    ax.grid(axis="y", alpha=0.25)
-
-    for bar, count, rate in zip(bars, counts.values, rates.values):
-        ax.text(
-            bar.get_x() + bar.get_width() / 2,
-            bar.get_height(),
-            f"{count:,.0f}\n({rate:.1f}%)",
-            ha="center", va="bottom"
+chart_col, insight_col = st.columns([1.6, 1])
+with chart_col:
+    st.plotly_chart(
+        plot_profile(selected_profile, overall_rate, selected_label),
+        use_container_width=True,
+    )
+with insight_col:
+    st.markdown("#### 이 컬럼은 무엇인가?")
+    st.write(selected_description)
+    st.markdown("#### 그래프에서 보이는 점")
+    st.info(profile_insight(selected_profile, overall_rate))
+    if selected_feature in {"channel_sales", "origin_up"}:
+        st.caption(
+            "원본 데이터의 익명화된 코드값은 읽기 쉽게 빈도순 '판매 채널 1, 2…' 또는 "
+            "'유입 경로 1, 2…'로 표시했습니다. 숫자 순서 자체에 의미는 없습니다."
         )
-    plt.tight_layout()
-    st.pyplot(fig)
 
-with col2:
-    st.subheader("🔥 가스 동시 사용 여부(has_gas) 분포")
+st.markdown("---")
+st.subheader("3. 계약 기간과 종료 시점을 함께 보면?")
+st.write(
+    "한 컬럼만 보는 대신, **계약을 얼마나 오래 유지했는지**와 "
+    "**계약 종료까지 얼마나 남았는지**를 함께 묶어 실제 이탈률을 비교합니다."
+)
 
-    gas_counts = df[gas_col].value_counts()
+matrix = risk_matrix.loc[risk_matrix["customer_count"] >= 30].copy()
+if matrix.empty:
+    st.info("표본 수가 충분한 계약 구간 조합이 없습니다.")
+else:
+    tenure_order = ["1년 미만", "1~3년", "3~5년", "5년 이상"]
+    end_order = ["기준일 이전", "3개월 이내", "3~12개월", "1년 초과"]
+    rate_pivot = (
+        matrix.pivot(index="tenure_band", columns="end_band", values="churn_rate")
+        .reindex(index=tenure_order, columns=end_order)
+    )
+    count_pivot = (
+        matrix.pivot(index="tenure_band", columns="end_band", values="customer_count")
+        .reindex(index=tenure_order, columns=end_order)
+    )
+    text = []
+    for i in range(len(rate_pivot.index)):
+        row = []
+        for j in range(len(rate_pivot.columns)):
+            rate = rate_pivot.iloc[i, j]
+            count = count_pivot.iloc[i, j]
+            if pd.isna(rate):
+                row.append("")
+            else:
+                row.append(f"{rate:.1%}<br>n={int(count):,}")
+        text.append(row)
 
-    labels = []
-    for idx in gas_counts.index:
-        rate = gas_rates[idx]
-        if idx == 't' or idx == 1:
-            labels.append(f"Gas 동시사용 ({rate:.0f}%)")
-        else:
-            labels.append(f"Gas 미사용 ({rate:.0f}%)")
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=rate_pivot.values * 100,
+            x=rate_pivot.columns,
+            y=rate_pivot.index,
+            text=text,
+            texttemplate="%{text}",
+            colorscale=[[0, "#eef3f7"], [1, ORANGE]],
+            colorbar_title="이탈률 %",
+            hovertemplate="계약 유지: %{y}<br>계약 종료: %{x}<br>이탈률: %{z:.1f}%<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        xaxis_title="계약 종료까지 남은 기간",
+        yaxis_title="계약 유지 기간",
+    )
+    st.plotly_chart(style_chart(fig, 430), use_container_width=True)
 
-    fig2, ax2 = plt.subplots(figsize=(5, 3.5))
-    ax2.pie(gas_counts, labels=labels, autopct='%1.1f%%', startangle=90,
-            colors=['#aec7e8', '#ffbb78'])
-    plt.tight_layout()
-    st.pyplot(fig2)
+    max_row = matrix.loc[matrix["churn_rate"].idxmax()]
+    st.markdown(
+        f"""
+        <div class="insight-box">
+        표본 30명 이상 조합 중 가장 높은 이탈률이 관찰된 구간은
+        <b>계약 유지 {max_row['tenure_band']} · 종료 {max_row['end_band']}</b> 조합입니다
+        ({float(max_row['churn_rate']):.1%}, n={int(max_row['customer_count']):,}).<br>
+        이 결과는 두 계약 시점 정보가 함께 있을 때 고객군을 더 구체적으로 나눠볼 수 있음을 보여줍니다.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-st.markdown(f"""
-> 💡 **현황 분석 인사이트**
-> * 전체 SME 고객 중 이탈 고객은 **{calc_churn_rate:.1f}%**로 심각한 **클래스 불균형** 상태입니다. 모델링 시 가중치 튜닝이 필수적입니다.
-> * 전체 고객의 **{calc_no_gas_rate:.1f}%**는 가스를 사용하지 않고 오직 전력만 사용하고 있어, 전력 요금 변동폭이 이탈의 가장 큰 도화선이 될 것입니다.
-""")
+st.markdown("---")
+st.subheader("4. 최근 가격 변화와 이탈률")
+price_candidates = {
+    "에너지 가격 변화": "off_peak_energy_recent_change_rate",
+    "전력 가격 변화": "off_peak_power_recent_change_rate",
+}
+price_label = st.selectbox("가격 변화 기준", list(price_candidates))
+price_feature = price_candidates[price_label]
+price_profile = profiles.loc[profiles["feature"] == price_feature].copy()
+if not price_profile.empty:
+    st.plotly_chart(
+        plot_profile(price_profile, overall_rate, price_label),
+        use_container_width=True,
+    )
+    st.info(profile_insight(price_profile, overall_rate))
+    st.caption(
+        "가격 변화가 이탈의 원인이라고 단정하는 그래프가 아닙니다. "
+        "가격 변화 구간별로 관찰된 이탈률 차이를 확인한 것입니다."
+    )
+
+with st.expander("데이터 품질과 전처리 과정 보기"):
+    st.markdown("#### 결측치가 많은 Feature")
+    top_missing = missing.loc[missing["missing_count"] > 0].head(10).copy()
+    if top_missing.empty:
+        st.write("최종 Train 데이터에 결측 Feature가 없습니다.")
+    else:
+        top_missing["결측률"] = top_missing["missing_rate"].map(lambda x: f"{x:.1%}")
+        st.dataframe(
+            top_missing[["feature", "missing_count", "결측률"]].rename(
+                columns={"feature": "Feature", "missing_count": "결측 수"}
+            ),
+            hide_index=True,
+            use_container_width=True,
+        )
+        st.caption(
+            "결측 행을 임의로 삭제하지 않고, 실제 모델 학습에서는 각 CV Fold 내부에서만 결측 대체를 수행합니다."
+        )
+
+    st.markdown("#### 데이터가 모델 입력으로 만들어지는 순서")
+    st.dataframe(flow, hide_index=True, use_container_width=True)
+    a0_count = int(float(metric_value(a3_overview, "a0_feature_count", 0)))
+    a3_count = int(float(metric_value(a3_overview, "a3_feature_count", 0)))
+    added = int(float(metric_value(a3_overview, "added_contract_features", 0)))
+    st.caption(
+        f"A0 {a0_count}개 Feature에 계약 생애주기 Feature {added}개를 추가해 최종 A3 {a3_count}개 Feature를 구성했습니다."
+    )
