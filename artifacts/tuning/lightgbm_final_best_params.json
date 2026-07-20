@@ -1,0 +1,23 @@
+{
+  "feature_count": 37,
+  "final_best_params": {
+    "class_weight": null,
+    "colsample_bytree": 0.9,
+    "learning_rate": 0.02,
+    "max_depth": 8,
+    "min_child_samples": 20,
+    "n_estimators": 800,
+    "num_leaves": 63,
+    "reg_alpha": 0.0,
+    "reg_lambda": 5.0
+  },
+  "full_train_cv_best_pr_auc": 0.2950961154938083,
+  "inner_splits": 3,
+  "model": "lightgbm",
+  "nested_oof_pr_auc": 0.3171893653249886,
+  "nested_oof_roc_auc": 0.6927289180802156,
+  "outer_splits": 5,
+  "search_iter": 10,
+  "selection_metric": "average_precision",
+  "train_rows": 11684
+}
