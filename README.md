@@ -1,8 +1,13 @@
 # 🤖 [프로젝트 타이틀] 대용량 데이터를 활용한 고객 이탈 예측 AI 모델
 
-> **SKN (SK Networks) Family Ai 캠프 2차 프로젝트** >
-> 
-> 본 프로젝트는 대용량 비즈니스 정형 데이터를 정제하고, 머신러닝(Scikit-learn) 및 딥러닝(PyTorch) 알고리즘을 활용하여 서비스 해지 및 고객 이탈(Churn)을 선제적으로 예측하는 AI 파이프라인 구축을 목표로 합니다.
+![](https://img.shields.io/badge/Python-3.x-3776AB?style=flat-square&logo=python&logoColor=white)
+![](https://img.shields.io/badge/scikit--learn-1.x-F7931E?style=flat-square&logo=scikit-learn&logoColor=white)
+![](https://img.shields.io/badge/Pandas-2.x-150458?style=flat-square&logo=pandas&white)
+![](https://img.shields.io/badge/Streamlit-1.x-FF4B4B?style=flat-square&logo=streamlit&logoColor=white)
+
+> **SKN (SK Networks) Family Ai 캠프 2차 프로젝트**
+>
+> 본 프로젝트는 파워코(PowerCo)의 대용량 비즈니스 정형 데이터를 정제하고, 머신러닝(Scikit-learn) 기반의 다양한 분류(Classification) 알고리즘 대조 실험을 최적화하여 서비스 해지 및 고객 이탈(Churn)을 선제적으로 예측하는 AI 파이프라인 구축을 목표로 합니다.
 
 ---
 
@@ -22,13 +27,21 @@
 ## 👥 2. 팀원 소개 및 역할 분담 (Team Members)
 | 이름 | 역할 | 담당 업무 |
 | :---: | :---: | :--- |
-| **홍길동** | **팀장** | 프로젝트 총괄, 데이터 스키마 설계, 가상 데이터 생성 알고리즘 조율, README 작성 |
-| **김영석** | 팀원 | 이종 테이블 결합(Merge) 및 결측치/이상치 처리 정제, EDA 시각화 결과서 작성 |
-| **김정재** | 팀원 | 이종 테이블 결합(Merge) 및 결측치/이상치 처리 정제, EDA 시각화 결과서 작성 |
-| **김혜진** | 팀원 | 머신러닝(Scikit-learn) 베이스라인 파이프라인 구축, 하이퍼파라미터 그리드 서치 최적화 |
-| **신가을** | 팀원 | 딥러닝(PyTorch) 다층 퍼셉트론(MLP) 신경망 레이어 설계, 학습 곡선 시각화 및 모델 파일 추출 |
+| **김정재** | **팀장** | 프로젝트 총괄, 데이터 수집 및 구조 설계, EDA 및 전처리, 데이터 분리 및 전처리 Pipeline 작성 등 |
+| **김영석** | 팀원 | Git&GitHub 운영, Streamlit 구현 |
+| **김혜진** | 팀원 | 머신러닝 모델 학습 및 비교, 성능 평가 및 임계값 결정, 최종 모델 저장 및 추론 검증 |
+| **신가을** | 팀원 | 머신러닝 모델 학습 및 비교, 성능 평가 및 임계값 결정, README.md 작성 |
 
 ---
+
+## 🛠️ 3. 기술 스택 (Tech Stack)
+
+* **Core Language**: Python 3.x
+* **Data Processing**: Pandas, NumPy (이종 테이블 결합 및 시간 파생 변수 자산화)
+* **Machine Learning**: Scikit-learn (주요 분류 알고리즘: LightGBM, XGBoost, Random Forest, Logistic Regression)
+* **Web UI 데모**: Streamlit 1.x (웹 기반 고객 이탈 예측 대시보드 구현)
+
+> 📌 **안내**: 구체적인 가상환경 구축 스크립트 및 모델 구동을 위한 명령어 설치 가이드는 본문 하단의 **[6. 개발 환경 설정]** 목차에 기술되어 있습니다. 전체 시스템의 모듈별 데이터 흐름은 첨부된 시스템 구성 다이어그램 이미지를 참고해 주세요.
 
 ## 🛠️ 3. 기술 스택 (Tech Stack)
 ### 🎨 가. Interactive UI & Visualization
@@ -66,46 +79,59 @@
 ```text
 project/
 ├── README.md                  # 본 프로젝트 가이드 명세서 (현재 파일)
-├── requirements.txt
+├── (x)requirements.txt
 ├── .gitignore
-├── .env.example
+├── (x).env.example
 ├── docs/
-│   ├── requirements.md        # 사용자, Target, 지표, 완료 조건
-│   ├── data_dictionary.md     # 컬럼·자료형·단위·출처
-│   └── validation_plan.md     # 분할·검증·임계값 결정 방법
+│   └── images/                # 시각화 이미지 및 에셋
+│   ├── (x)requirements.md        # 사용자, Target, 지표, 완료 조건
+│   ├── (x)data_dictionary.md     # 컬럼·자료형·단위·출처
+│   └── (x)validation_plan.md     # 분할·검증·임계값 결정 방법
 ├── data/                      # 원본 및 정제 완료 데이터 (.gitignore 등록 필수)
 │   ├── raw/                   # 수집한 CSV 테이블 파일들 등 원본 / 수정 금지
-│   ├── interim/               # 병합·집계 중간 데이터
-│   └── processed/             # 최종 학습 테이블
-├── notebooks/
+|   |   ├── client_data.csv
+|   |   └── price_data.csv
+│   ├── interim/               # 병합·집계 중간 데이터(01~03단계 및 보관본)
+│   └── processed/             # 최종 모델링용 데이터
+|       ├── train.csv
+|       └── test.csv
+├── preprocesing/
+|   ├── preprocessing_report.md  # 전체 전처리 과정 및 컬럼 정의 문서
+|   ├── eda.ipynb                # 원본 구조, 결측치, 이상치 및 타깃 불균형 분석
+|   ├── data_preprocessing.py    # 고객 단위 분할 및 데이터 생성
+|   └── preprocessing_plus.py    # 계약 날짜 파생 변수(12개) 추가 및 최종 저장
+├── (x)notebooks/
 │   ├── 01_data_check.ipynb
 │   ├── 02_eda.ipynb
 │   └── 03_model_experiments.ipynb
-├── src/
+├── (x)src/
 │   ├── data.py                # 로드·검증·데이터셋 생성
 │   ├── features.py            # Feature 생성
 │   ├── train_ml.py            # ML 학습
 │   ├── train_dl.py            # 선택 DL 학습
 │   ├── evaluate.py            # 공통 평가
 │   └── predict.py             # 앱과 공유하는 추론 함수
+├── modeling/
+|   ├──
+│   └── 
 ├── models/                    # 가중치 파일 저장 공간 (.gitignore 등록 필수)
 │   └── churn_pipeline.joblib
 ├── artifacts/
-│   ├── feature_schema.json
-│   ├── model_metadata.json
-│   └── metrics.csv
+│   ├── (x)feature_schema.json
+│   ├── (x)model_metadata.json
+│   └── (x)metrics.csv
 ├── streamlit_app/
 │   ├── app.py
 │   └── pages/
-│       ├── 1_현황.py
-│       ├── 2_모델성능.py
-│       └── 3_이탈예측.py
-├── reports/
+│       ├── 1_Dashboard.py
+│       ├── 2_Model_Performance.py
+│       └── 3_Realtime_Prediction.py
+├── (x)reports/
 │   ├── preprocessing_report.md
 │   └── training_report.md
-├── tests/
+├── (x)tests/
 │   └── test_inference.py      # 저장된 모델 파일을 로드하여 유효성을 검증하는 예측 스크립트
-└── presentation.pdf
+└── (x)presentation.pdf
 ```
 
 ---
@@ -118,9 +144,8 @@ project/
 | **1. 기획 및 설계** | 프로젝트 주제 확정 및 GitHub 연동, 데이터 스키마 설계 및 협업 규칙 합의 | ▓ | ▓ | ▓ | ░ | ░ | ░ | ░ | ░ |
 | **2-1. 데이터 전처리** | 대용량 이종 데이터셋 확보, 공통 Key 기준 테이블 병합(Merge) 및 정합성 검증 | ░ | ▓ | ▓ | ▓ | ░ | ░ | ░ | ░ |
 | **2-2. EDA 및 시각화** | 상관관계 분석, 분포 시각화(Seaborn), **[① 데이터 전처리 결과서]** 작성 | ░ | ░ | ░ | ▓ | ▓ | ░ | ░ | ░ |
-| **3-1. AI 모델링 (ML)** | Scikit-learn 기반 파이프라인 구축, GridSearchCV 최적 파라미터 튜닝 | ░ | ░ | ░ | ░ | ▓ | ▓ | ░ | ░ |
-| **3-2. AI 모델링 (DL)** | PyTorch 기반 MLP 아키텍처 설계, 학습 곡선(Loss/F1) 모니터링 및 모델 파일 추출 | ░ | ░ | ░ | ░ | ▓ | ▓ | ░ | ░ |
-| **4. UI & 데모 구현** | Streamlit 기반의 모델 서빙(Inference) 예측 대시보드 화면 및 핵심 연동 개발 | ░ | ░ | ░ | ░ | ▓ | ▓ | ▓ | ░ |
+| **3. AI 모델링 (ML)** | Scikit-learn 기반 파이프라인 구축, GridSearchCV 최적 파라미터 튜닝 | ░ | ░ | ░ | ░ | ▓ | ▓ | ░ | ░ |
+| **4. UI & 데모 구현** | Streamlit 기반의 모델 서빙(Inference) 예측 대시보드 화면 및 핵심 연동 개발 | ░ | ░ | ░ | ░ | ░ | ▓ | ▓ | ░ |
 | **5. 산출물 최종 검증** | 모델 최종 추론 테스트, **[② 학습 결과서]** 취합 및 구글 드라이브 최종 제출 | ░ | ░ | ░ | ░ | ░ | ▓ | ▓ | ▓ |
 
 ---
@@ -173,38 +198,15 @@ pip install -r requirements.txt --no-warn-script-location
 
 ## 📊 7. 데이터셋 및 피처 엔지니어링 (Data & Feature Engineering)
 
-실무 환경과 유사한 대규모 비즈니스 트랜잭션 로그를 다루기 위해, 단일 Flat 테이블이 아닌 관계형 구조를 가진 이종 테이블을 결합하여 분석을 진행했습니다.
+> 💡 **핵심 요약**
+> * **선정 데이터셋**: PowerCo 고객 데이터 마스터 및 월별 가격 이력 테이블 결합 (총 200,608행).
+> * **데이터 누수 방지**: 시점 및 정보 누수(Data Leakage) 차단을 위해 **고객 ID 기준 Stratified Split (80:20)** 분할 방식을 엄격하게 고수.
+> * **피처 고도화**: 베이스라인(A0) 체계에 연속적 시계열 정보인 A3 계약 날짜 피처 12개를 확장하여 총 37개의 모델 입력 Feature 구축.
+> * **파이프라인 위임 원칙**: 교차 검증 시 통계량 전이를 방지하기 위해 결측치 대체, 인코딩, 스케일링, 오버샘플링 처리를 모두 모델 학습 Fold 내부로 위임.
 
-### 1) 데이터셋 정보 및 테이블 연계 구조 (Data Schema)
-* **선정 데이터셋**: [예: Open University Learning Analytics Dataset (OULAD) / 또는 Olist Ecommerce]
-* **데이터 규모**: 총 `XX,XXX` 행 (10,000행 이상 데이터 요구사항 충족)
-* **이종 테이블 결합 구조 (Join Workflow)**:
-  - 개별 조각으로 분리된 테이블들을 **고객/학생 고유 식별 Key**를 기준으로 병합하여 단일 마스터 데이터셋을 생성했습니다.
+데이터셋의 상세 테이블 규격, 파생 변수 계산 공식, 누수 차단 메커니즘 및 파이프라인 위임 원칙에 대한 구체적인 기술 명세는 아래의 상세 보고서 전용 문서에서 확인하실 수 있습니다.
 
-```text
-  [기본 정보 테이블] (studentInfo / customer) 
-         │
-         ├── (기준 Key: id_student / customer_id) ──▶ [관계형 병합 (Inner Join)]
-         │
-  [동적 로그 테이블] (studentRegistration / orders)
-```
-
-| 테이블명(CSV) | 수집 항목(Features) | 데이터 타입 | 결합 기준 Key |
-| :--- | :--- | :---: | :---: |
-| `[테이블 A]` | 인적 사항, 가입 경로, 데모그래픽 정보 | 범주형/수치형 | `customer_id` (PK) |
-| `[테이블 B]` | 일자별 거래 로그, 접속 빈도, 상호작용 이력 | 수치형 | `customer_id` (FK) |
-
-### 2) 주요 전처리 및 피처 엔지니어링 (Feature Engineering)
-모델의 학습 알고리즘이 왜곡되지 않고 최적의 성능을 낼 수 있도록 아래의 정교한 전처리 파이프라인을 구축했습니다.
-* **결측치 및 이상치 처리 (Imputation & Outlier):**
-  - 연속형 변수의 결측치는 데이터 분포의 편향을 막기 위해 평균값 대신 중앙값(Median)으로 대체했습니다.
-  - 이상치는 사분위수 범위(**IQR, Interquartile Range**) 기준으로 탐지하여 하한/상한 경계값으로 클리핑(Clipping) 처리를 수행했습니다.
-* **피처 인코딩 및 스케일링 (Encoding & Scaling):**
-  - **범주형 피처**: 트리 모델 및 선형 모델의 왜곡 없는 학습을 위해 **One-Hot Encoding**을 적용했습니다.
-  - **수치형 피처**: 변수 간 단위 차이로 인한 최적화 수렴 속도 저하를 방지하기 위해 **StandardScaler**로 정규화를 진행했습니다.
-* **클래스 불균형 해결 (Class Imbalance Management):**
-  - 비즈니스 정형 데이터의 특성상 '이탈(1)' 고객이 '유지(0)' 고객보다 압도적으로 적은 불균형이 존재합니다.
-  - 이를 해결하기 위해 `train_test_split` 시 target 비율을 동등하게 유지하는 `stratify=y` 옵션을 필수로 지정했으며, 알고리즘 인스턴스 생성 시 `class_weight='balanced'` 옵션을 활성화하여 소수 클래스의 패널티를 보정했습니다.
+* 👉 [데이터셋 및 피처 엔지니어링 상세 보고서 바로가기](07_Data&Feature_Engineering.md)
 
 ---
 
@@ -241,37 +243,27 @@ streamlit run src/app.py
 
 ## 📈 9. 모델 학습 및 평가 결과 (Results)
 
-본 프로젝트에서 구축한 데이터 전처리 파이프라인을 바탕으로, 머신러닝(Scikit-learn) 알고리즘 및 딥러닝(PyTorch MLP) 신경망 모델의 성능을 대조 실험한 최종 결과입니다.
+본 프로젝트는 극심한 클래스 불균형(이탈률 9.7%) 데이터셋 환경에서 일반적인 0.5 임계값 하드코딩 모델이 가지는 한계를 극복하기 위해, **중첩 교차 검증(Nested CV)**과 **동적 임계값 최적화(Dynamic Thresholding)**를 도입했습니다.
 
-> **💡 평가지표 선정 기준 (Evaluation Metrics)**<br>
-> 고객 이탈(Churn) 예측 모델의 특성상, 실제 이탈할 고객을 이탈하지 않을 것으로 잘못 예측하는 리스크를 방어해야 합니다. 따라서 본 프로젝트는 전반적인 분류 균형을 나타내는 **F1-Score**와 실제 이탈자를 정확히 잡아내는 **Recall(재현율)**을 핵심 평가 지표로 설정하였습니다.
+* **최종 선정 모델:** **LightGBM (Champion Model)**
+* **핵심 지표 요약:**
+  * **OOF PR-AUC:** `0.3172` (전체 후보 모델 중 압도적 1위)
+  * **최적 분류 임계값:** `0.131` (F1-Score를 0.3263으로 극대화하는 황금비율 탐색)
+  * **Top 10% Lift:** `3.2847 배` (전체 예산의 10%만 집행 시 무작위 추출 대비 3.28배 높은 효율 입증)
 
-### 📊 1) 모델별 성능 비교 (Model Performance Comparison)
+👉 [모델 성능 분석 및 심화 시각화 결과 보고서 전문 보기 (09_Results.md)](docs/09_Results.md)
 
-| 모델 분류 | 알고리즘 (Algorithm) | Accuracy | Precision | Recall (핵심) | F1-Score (핵심) | ROC-AUC |
-| :---: | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Baseline** | Logistic Regression | `0.XX` | `0.XX` | `0.XX` | `0.XX` | `0.XX` |
-| **ML (Tuned)** | Random Forest (GridSearchCV) | `0.XX` | `0.XX` | `0.XX` | `0.XX` | `0.XX` |
-| **ML (Tuned)** | XGBoost (GridSearchCV) | `0.XX` | `0.XX` | `0.XX` | `0.XX` | `0.XX` |
-| **ML (Tuned)** | LightGBM (GridSearchCV) | `0.XX` | `0.XX` | `0.XX` | `0.XX` | `0.XX` |
-| **DL (MLP)** | PyTorch Multi-Layer Perceptron | `0.XX` | `0.XX` | `0.XX` | `0.XX` | `0.XX` |
+---
 
-* *모든 모델은 데이터의 치우침을 방지하고 일반화 성능을 확보하기 위해 **5-Fold Stratified Cross-Validation**을 기본 적용하여 검증되었습니다.*
+## 🎯 10. 비즈니스 활용 및 이탈 방어 전략 (Business Application)
 
-### 🧠 2) 핵심 분석 결과 및 시각화 (Key Findings)
+예측 성공률을 높이는 기술적 고도화를 넘어, 모델이 도출한 인사이트를 바탕으로 현업 부서(마케팅, 영업기획, 재무팀)가 즉각 현장에 투입할 수 있는 실무적인 액션 플레이북을 수립했습니다.
 
-* **최적 알고리즘 도출**:<br>
-  - 본 프로젝트에서 최종 채택한 최적의 예측 알고리즘은 **`[최적 모델명 기재, 예: LightGBM]`**입니다.<br>
-  - 하이퍼파라미터 튜닝(`max_depth=X`, `learning_rate=X.XX`, `n_estimators=XXX`)을 거친 결과, 베이스라인 모델 대비 F1-Score가 약 **`X.X%`** 향상되는 유의미한 성능 개선을 확인했습니다.
-* **피처 중요도 (Feature Importance) 분석**:<br>
-  - 학습된 트리 모델의 중요 가중치를 시각화한 결과, 고객 이탈에 미치는 영향력이 가장 높은 상위 3대 핵심 변수는 **`[변수 A]`**, **`[변수 B]`**, **`[변수 C]`**로 파악되었습니다.<br>
-  - 이를 통해 `[해당 변수들이 이탈율 상승/하락에 미치는 직접적인 영향에 대해 도출해 낸 인사이트 기재]`를 정량적으로 실증했습니다.
+* **확률 기반 리스크 세그멘테이션:** 최적 임계값(13.1%) 기준 안정/주의/초고위험 3단계 관리 체계 구축
+* **원인 기반 맞춤형 플레이북:** off-peak 가격 고정 요금제 제안, 갱신 60일 전 선제적 리워드 발송, 불량 유입 채널 모니터링 및 패널티 부여
+* **재무적 가치(ROI) 입증:** LightGBM 모델 도입만으로 무작위 방식 대비 **연간 약 1억 5,000만 원($114,000) 이상의 순매출 상실을 추가 방어**하는 정량적 경영 가치 실현
 
-### 📈 3) 비즈니스 기대 효과 (Business Impact)
-
-* **실시간 이탈 징후 모니터링 및 방어**:<br>
-  - 구축된 예측 파이프라인을 Streamlit 데모 대시보드와 통합 연동하여, 신규 데이터 주입 시 이탈 고위험군(예측 확률 70% 이상) 고객을 실시간으로 자동 감지합니다.<br>
-  - 감지된 고위험군 타겟을 대상으로 맞춤 마케팅 프로모션을 선제 제안할 수 있는 트리거 시스템의 기틀을 다져, 기업의 고객 유지 관리 비용 절감에 기여합니다.
+👉 [현업 부서용 이탈 방어 액션 플랜 및 재무 ROI 보고서 전문 보기 (10_Business_Application.md)](docs/10_Business_Application.md)
 
 ---
 
