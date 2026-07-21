@@ -61,7 +61,7 @@ def show_home() -> None:
     c4.metric("Top 10% Lift", f"{float(best_model_df['test_top10_lift']):.2f}배")
 
     st.markdown("---")
-    st.subheader("이 대시보드에서 보는 순서")
+    st.subheader("📌 대시보드 핵심 메뉴 안내")
 
     col_guide1, col_guide2, col_guide3 = st.columns(3)
     # 1번 카드: 1_Dashboard.py 연동
