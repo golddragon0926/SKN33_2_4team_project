@@ -7,7 +7,7 @@ import streamlit as st
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-MODEL_DIR = PROJECT_ROOT / "artifacts" / "streamlit" / "modeling"
+MODEL_DIR = PROJECT_ROOT / "artifacts"
 NAVY = "#17324d"
 ORANGE = "#f59e0b"
 GRAY = "#9aa6b2"
@@ -43,7 +43,15 @@ st.caption(
 )
 
 try:
-    metrics = load_csv(MODEL_DIR / "model_metrics.csv")
+    metrics = load_csv(MODEL_DIR / "model_algorithm_comparison.csv")
+    display_names = {
+        "dummy": "Dummy",
+        "logistic_regression": "Logistic Regression",
+        "random_forest": "Random Forest",
+        "xgboost": "XGBoost",
+        "lightgbm": "LightGBM",
+    }
+    metrics["display_name"] = metrics["model"].map(display_names).fillna(metrics["model"])
     champion = load_csv(MODEL_DIR / "champion_summary.csv").iloc[0]
     pr_curve = load_csv(MODEL_DIR / "pr_curve.csv")
     campaign = load_csv(MODEL_DIR / "campaign_capacity.csv")
@@ -226,7 +234,7 @@ st.write(
     "A0에서 충분히 활용하지 못했던 **계약 유지 기간·종료·갱신 시점**을 12개 Feature로 추가한 A3가 더 좋은 결과를 보여 최종 37개 Feature를 사용했습니다."
 )
 
-importance_path = MODEL_DIR / "feature_importance.csv"
+importance_path = MODEL_DIR / "lightgbm_feature_importance.csv"
 if importance_path.exists():
     st.markdown("---")
     st.subheader("6. 최종 모델은 어떤 정보를 많이 활용했나?")

@@ -6,8 +6,8 @@ import streamlit as st
 
 APP_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = APP_DIR.parent
-EDA_DIR = PROJECT_ROOT / "artifacts" / "streamlit" / "eda"
-MODEL_DIR = PROJECT_ROOT / "artifacts" / "streamlit" / "modeling"
+EDA_DIR = PROJECT_ROOT / "artifacts" / "eda"
+MODEL_DIR = PROJECT_ROOT / "artifacts"
 
 st.set_page_config(
     page_title="PowerCo Churn Insight",
@@ -80,7 +80,7 @@ def show_home() -> None:
         c4.metric("Top 10% Lift", f"{float(champion['test_top10_lift']):.2f}배")
     except Exception:
         st.info(
-            "아직 Streamlit용 결과 CSV가 생성되지 않았습니다. "
+            "아직 필요한 Artifact가 생성되지 않았습니다. "
             "전처리와 평가 코드를 실행한 뒤 다시 열어주세요."
         )
         st.code(
