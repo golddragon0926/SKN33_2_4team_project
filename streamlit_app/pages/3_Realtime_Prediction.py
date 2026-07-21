@@ -182,7 +182,6 @@ sim_pred = predict_customer(
 sim_score = float(sim_pred["risk_score"])
 sim_group = str(sim_pred["risk_group"])
 sim_icon = str(sim_pred["risk_icon"])
-# 💡 [핵심 보완 1] 점수가 아닌 실제 전체 대비 상위 백분위(top_percent) 추출
 sim_top_pct = float(sim_pred.get("top_percent", 50.0))
 
 # ------------------------------------------
@@ -241,9 +240,10 @@ fig.add_trace(
         x=[orig_score],
         name="변경 전 (원본)",
         orientation="h",
-        marker=dict(color=GRAY, opacity=0.7),
+        marker=dict(color=GRAY, opacity=0.8),
         text=[f"원본: {orig_score:.3f}"],
-        textposition="inside",
+        textposition="outside",
+        textfont=dict(size=15, color="#1e293b", family="sans-serif"),
     )
 )
 fig.add_trace(
@@ -254,30 +254,37 @@ fig.add_trace(
         orientation="h",
         marker=dict(color=RED if sim_score > orig_score else GREEN),
         text=[f"시뮬레이션: {sim_score:.3f}"],
-        textposition="inside",
+        textposition="outside",
+        textfont=dict(size=15, color="#1e293b", family="sans-serif"),
     )
 )
 fig.update_layout(
     barmode="group",
-    xaxis=dict(range=[0, 1.0], title="상대적 위험도 점수 (0.0 ~ 1.0)"),
+    xaxis=dict(range=[0, 1.18], title="상대적 위험도 점수 (0.0 ~ 1.0)"),
     yaxis=dict(title=""),
     legend=dict(
-        orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
+        orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1
     ),
 )
-st.plotly_chart(style_chart(fig, height=200), use_container_width=True)
+st.plotly_chart(style_chart(fig, height=220), use_container_width=True)
 
-# 💡 [핵심 보완 2] 모델 해석 제한 사항 및 Non-Causal 안내 문구 명시
-st.caption(
-    "⚠️ **주의사항 및 해석 한계:**<br>"
-    "1. 산출된 위험도 점수(0.0~1.0)는 고객 간 상대적 이탈 위험 순위이며 절대적인 이탈 확률(%)이 아닙니다.<br>"
-    "2. What-If 시뮬레이션 결과는 **입력값 변경에 따른 모델 점수 민감도**를 의미하며, 해당 조건을 변경했을 때 이탈이 감소한다는 **인과적 효과(Causal Impact)를 보장하지 않습니다.**",
+# 💡 모델 해석 제한 사항 및 Non-Causal 안내 문구 (ui_styles.py의 .warning-box 활용)
+st.markdown(
+    """
+    <div class="warning-box">
+        <span class="warning-box-title">⚠️ 주의사항 및 해석 한계</span>
+        <ol>
+            <li>산출된 위험도 점수(0.0~1.0)는 고객 간 <b>상대적 이탈 위험 순위</b>이며 절대적인 이탈 확률(%)이 아닙니다.</li>
+            <li>What-If 시뮬레이션 결과는 입력값 변경에 따른 <b>모델 점수 민감도</b>를 의미하며, 해당 조건을 변경했을 때 이탈이 감소한다는 <b>인과적 효과(Causal Impact)를 보장하지 않습니다.</b></li>
+        </ol>
+    </div>
+    """,
     unsafe_allow_html=True,
 )
 
 st.write("")
 
-# 💡 [핵심 보완 3] sim_top_pct 기준의 정확한 구간 판정 및 Pilot 가설 안내 반영
+# 💡 sim_top_pct 기준의 정확한 구간 판정 및 Pilot 가설 안내 반영
 if sim_top_pct <= 5.0 or "최우선" in sim_group:
     with st.container(border=True):
         st.markdown(
@@ -348,13 +355,13 @@ else:
             """
         )
 
-# 💡 [핵심 보완 4] Pilot 가설 검증 필요성에 대한 비즈니스 경고 안내 박스
+# 💡 Pilot 가설 검증 필요성에 대한 비즈니스 경고 안내 박스 (.guideline-box 활용)
 st.markdown(
     """
-    <div class="insight-box">
+    <div class="guideline-box">
     <b>💡 현장 적용 시 실행 가이드라인</b><br>
-    제시된 접촉 시점(D-90/60/30)과 할인 혜택은 **현장 적용을 위한 추천안(가이드라인)**입니다.<br>
-    전체 고객에게 즉시 적용하기보다 **일부 고객에게 먼저 시범 적용(소규모 테스트)하여 실제 이탈 방어 효과와 예산 대비 효율을 확인한 뒤 확대**하는 것을 권장합니다.
+    제시된 접촉 시점(D-90/60/30)과 할인 혜택은 <b>현장 적용을 위한 추천안(가이드라인)</b>입니다.<br>
+    전체 고객에게 즉시 적용하기보다 <b>일부 고객에게 먼저 시범 적용(소규모 테스트)하여 실제 이탈 방어 효과와 예산 대비 효율을 확인한 뒤 확대</b>하는 것을 권장합니다.
     </div>
     """,
     unsafe_allow_html=True,
