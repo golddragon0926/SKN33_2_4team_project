@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 
 
@@ -50,6 +51,7 @@ CROSS_FEATURE_COLS = ["forecast_off_peak_energy_change", "forecast_off_peak_powe
 ENGINEERED_FEATURE_COLS = CLIENT_FEATURE_COLS + PRICE_FEATURE_COLS + CROSS_FEATURE_COLS
 
 EDA_ARTIFACT_DIR = Path("artifacts") / "eda"
+REPORT_IMAGE_DIR = Path("docs") / "images" / "preprocessing_report"
 
 
 def _save_eda_artifact(df: pd.DataFrame, path: Path) -> None:
@@ -164,6 +166,181 @@ def _export_base_eda_artifacts(
     return out_dir
 
 
+
+
+def _save_figure(fig: plt.Figure, path: Path) -> None:
+    """보고서용 그래프를 저장하고 Figure를 닫는다."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(path, dpi=160, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _save_base_report_figures(
+    raw: dict[str, Any],
+    built: dict[str, Any],
+) -> Path:
+    """
+    data_preprocessing.py 단계에서 확인 가능한 전처리 보고서용 그래프를 저장한다.
+
+    그래프는 전처리 판단 근거를 보여주기 위한 용도이며
+    Streamlit 동작과는 독립적이다.
+    """
+    project_root = Path(raw["project_root"])
+    image_dir = project_root / REPORT_IMAGE_DIR
+    image_dir.mkdir(parents=True, exist_ok=True)
+
+    client = raw["client"].copy()
+    price = raw["price"].copy()
+    train_client = raw["train_client"].copy()
+    test_client = raw["test_client"].copy()
+
+    # 1. 전체 타깃 분포
+    churn_counts = (
+        client[TARGET_COL]
+        .value_counts()
+        .reindex([0, 1], fill_value=0)
+    )
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    bars = ax.bar(["Retained (0)", "Churn (1)"], churn_counts.values)
+    ax.set_title("Target Distribution")
+    ax.set_ylabel("Customers")
+    total = churn_counts.sum()
+    for bar, count in zip(bars, churn_counts.values):
+        rate = count / total if total else 0
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            f"{int(count):,}\n({rate:.1%})",
+            ha="center",
+            va="bottom",
+        )
+    _save_figure(fig, image_dir / "01_churn_distribution.png")
+
+    # 2. 원본 결측률 상위 컬럼
+    missing_rows: list[dict[str, Any]] = []
+    for source_name, frame in [("client", client), ("price", price)]:
+        missing = frame.isna().sum()
+        for feature, count in missing.items():
+            if count > 0:
+                missing_rows.append(
+                    {
+                        "label": f"{source_name}.{feature}",
+                        "missing_rate": count / len(frame),
+                    }
+                )
+
+    missing_df = pd.DataFrame(missing_rows)
+    fig, ax = plt.subplots(figsize=(9, 5))
+    if missing_df.empty:
+        ax.text(
+            0.5,
+            0.5,
+            "No missing values detected in raw data",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+        ax.set_axis_off()
+    else:
+        top_missing = (
+            missing_df
+            .sort_values("missing_rate", ascending=False)
+            .head(15)
+            .sort_values("missing_rate")
+        )
+        ax.barh(
+            top_missing["label"],
+            top_missing["missing_rate"] * 100,
+        )
+        ax.set_title("Raw Missing Rate - Top Columns")
+        ax.set_xlabel("Missing rate (%)")
+    _save_figure(fig, image_dir / "02_raw_missing_rate.png")
+
+    # 3. Train/Test 타깃 비율 비교
+    split_rates = pd.Series(
+        {
+            "Train": float(train_client[TARGET_COL].mean()),
+            "Test": float(test_client[TARGET_COL].mean()),
+        }
+    )
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    bars = ax.bar(split_rates.index, split_rates.values * 100)
+    ax.set_title("Churn Rate after Stratified Split")
+    ax.set_ylabel("Churn rate (%)")
+    for bar, value in zip(bars, split_rates.values):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            f"{value:.2%}",
+            ha="center",
+            va="bottom",
+        )
+    _save_figure(fig, image_dir / "03_train_test_churn_rate.png")
+
+    # 4. 월별 대표 가격 중앙값 추이
+    price_plot = price.copy()
+    price_plot["price_date"] = pd.to_datetime(
+        price_plot["price_date"],
+        errors="coerce",
+    )
+    monthly = (
+        price_plot
+        .dropna(subset=["price_date"])
+        .groupby("price_date")[
+            ["price_off_peak_var", "price_off_peak_fix"]
+        ]
+        .median()
+        .sort_index()
+    )
+    fig, ax = plt.subplots(figsize=(10, 4.8))
+    if monthly.empty:
+        ax.text(
+            0.5,
+            0.5,
+            "No valid monthly price records",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+        ax.set_axis_off()
+    else:
+        ax.plot(
+            monthly.index,
+            monthly["price_off_peak_var"],
+            marker="o",
+            label="Off-peak energy price",
+        )
+        ax.set_title("Monthly Median Off-peak Energy Price")
+        ax.set_xlabel("Price month")
+        ax.set_ylabel("Median variable price")
+        ax.tick_params(axis="x", rotation=45)
+    _save_figure(fig, image_dir / "04_monthly_price_median_trend.png")
+
+    # 5. A0 생성 후 Feature 구성
+    a0_numeric = len(built["numeric_features"])
+    a0_categorical = len(built["categorical_features"])
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    bars = ax.bar(
+        ["Numeric", "Categorical"],
+        [a0_numeric, a0_categorical],
+    )
+    ax.set_title("A0 Feature Composition")
+    ax.set_ylabel("Feature count")
+    for bar, value in zip(
+        bars,
+        [a0_numeric, a0_categorical],
+    ):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            str(value),
+            ha="center",
+            va="bottom",
+        )
+    _save_figure(fig, image_dir / "05_a0_feature_composition.png")
+
+    return image_dir
 
 def find_project_root(start: str | Path | None = None) -> Path:
     """data/raw 폴더가 있는 프로젝트 루트를 찾는다."""
@@ -721,7 +898,9 @@ def run_preprocessing(
 
     if export:
         eda_artifact_dir = _export_base_eda_artifacts(raw, built)
+        report_image_dir = _save_base_report_figures(raw, built)
         print(f"EDA Artifact 저장 완료: {eda_artifact_dir}")
+        print(f"전처리 보고서 이미지 저장 완료: {report_image_dir}")
 
     return {**raw, **built}
 
