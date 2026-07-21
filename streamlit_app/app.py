@@ -25,7 +25,7 @@ def get_app_navigation(show_home_func):
             ],
             "ANALYSIS": [
                 st.Page("pages/1_Dashboard.py", title="고객 데이터 인사이트", icon="📊"),
-                st.Page("pages/2_Model_Performance.py", title="모델 성능 평가", icon="🤖"),
+                st.Page("pages/2_Model_Performance.py", title="모델 성능 평가 및 검증", icon="🤖"),
                 st.Page("pages/3_Realtime_Prediction.py", title="실시간 예측 · 마케팅 전략", icon="🎯"),
             ],
         }

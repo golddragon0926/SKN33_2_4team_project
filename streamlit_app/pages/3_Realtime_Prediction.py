@@ -53,12 +53,12 @@ def load_prediction_metadata() -> dict:
 
 
 # ==========================================
-# 메인 대시보드 (What-If 시뮬레이터)
+# 메인 대시보드 (실시간 예측 & 마케팅 전략)
 # ==========================================
 
-st.title("🎛️ 실시간 이탈 위험 시뮬레이터")
+st.title("🎯 실시간 예측 & 마케팅 전략")
 st.caption(
-    "특정 고객을 선택한 뒤 핵심 요인을 직접 조절하여 영업 조건 변화에 따른 이탈 위험도 점수(Risk Score)의 실시간 변동과 대응 전략을 확인합니다."
+    "특정 고객을 선택한 뒤 핵심 요인을 직접 조절하여 영업 조건 변화에 따른 이탈 위험도(Risk Score)의 실시간 변동과 대응 전략을 확인합니다."
 )
 
 # 1. 파일 로딩
@@ -90,6 +90,7 @@ try:
     orig_score = float(orig_pred["risk_score"])
     orig_group = str(orig_pred["risk_group"])
     orig_icon = str(orig_pred["risk_icon"])
+    orig_top_pct = float(orig_pred.get("top_percent", 50.0))
 except Exception as exc:
     st.error("🚨 모델 예측 중 오류가 발생했습니다.")
     st.stop()
@@ -97,7 +98,7 @@ except Exception as exc:
 col_base1, col_base2 = st.columns(2)
 with col_base1:
     st.info(
-        f"**선택 고객 원본 위험도 점수:** `{orig_score:.3f}` ({orig_icon} {orig_group})"
+        f"**선택 고객 원본 위험도 점수:** `{orig_score:.3f}` ({orig_icon} {orig_group} / 상위 {orig_top_pct:.1f}%)"
     )
 with col_base2:
     st.caption(
@@ -181,6 +182,8 @@ sim_pred = predict_customer(
 sim_score = float(sim_pred["risk_score"])
 sim_group = str(sim_pred["risk_group"])
 sim_icon = str(sim_pred["risk_icon"])
+# 💡 [핵심 보완 1] 점수가 아닌 실제 전체 대비 상위 백분위(top_percent) 추출
+sim_top_pct = float(sim_pred.get("top_percent", 50.0))
 
 # ------------------------------------------
 # Step 4: 실시간 AI 예측 & 맞춤형 대응 전략 통합 섹션
@@ -200,10 +203,10 @@ diff_color = (
 
 # 그룹 변화에 따른 델타 문구 생성
 if orig_group == sim_group:
-    group_delta = f"{orig_icon} {sim_group} 상태 유지"
+    group_delta = f"{orig_icon} {sim_group} (상위 {sim_top_pct:.1f}%)"
     group_delta_color = "off"
 else:
-    group_delta = f"{orig_group} ➔ {sim_group} 변경"
+    group_delta = f"{orig_group} ➔ {sim_group} (상위 {sim_top_pct:.1f}%)"
     group_delta_color = "normal" if sim_score < orig_score else "inverse"
 
 # 1. 핵심 수치 메트릭 카드 3개
@@ -212,7 +215,7 @@ res_col1, res_col2, res_col3 = st.columns(3)
 res_col1.metric(
     "변경 전 (원본) 위험도 점수",
     f"{orig_score:.3f}",
-    f"{orig_icon} {orig_group}",
+    f"{orig_icon} {orig_group} (상위 {orig_top_pct:.1f}%)",
     delta_color="off",
 )
 
@@ -264,61 +267,65 @@ fig.update_layout(
 )
 st.plotly_chart(style_chart(fig, height=200), use_container_width=True)
 
+# 💡 [핵심 보완 2] 모델 해석 제한 사항 및 Non-Causal 안내 문구 명시
 st.caption(
-    "⚠️ **참고:** 산출된 이탈 위험도 점수(0.0~1.0)는 고객 간 상대적 이탈 위험 순위를 나타내는 수치이며, 절대적인 이탈 확률(%)을 의미하지 않습니다."
+    "⚠️ **주의사항 및 해석 한계:**<br>"
+    "1. 산출된 위험도 점수(0.0~1.0)는 고객 간 상대적 이탈 위험 순위이며 절대적인 이탈 확률(%)이 아닙니다.<br>"
+    "2. What-If 시뮬레이션 결과는 **입력값 변경에 따른 모델 점수 민감도**를 의미하며, 해당 조건을 변경했을 때 이탈이 감소한다는 **인과적 효과(Causal Impact)를 보장하지 않습니다.**",
+    unsafe_allow_html=True,
 )
 
 st.write("")
 
-# 3. 판정된 위험도 등급(sim_group 또는 sim_score)에 따른 맞춤형 액션 카드 1개 출력
-if "초고위험" in sim_group or sim_score >= 0.7:
+# 💡 [핵심 보완 3] sim_top_pct 기준의 정확한 구간 판정 및 Pilot 가설 안내 반영
+if sim_top_pct <= 5.0 or "최우선" in sim_group:
     with st.container(border=True):
         st.markdown(
-            f"### 🔴 판정 등급: **Top 5% 초고위험군** ({sim_icon} `{sim_score:.3f}pt`)"
+            f"### 🔴 관리 등급: **Top 5% 최우선 관리군** ({sim_icon} 위험도 `{sim_score:.3f}pt` / 상위 `{sim_top_pct:.1f}%`)"
         )
         st.markdown(
             """
-            **[🚨 High-Touch 1:1 영업 전담 대응 프로토콜]**
+            **[🚨 High-Touch 1:1 영업 전담 대응 프로토콜 (Pilot 가설)]**
 
-            * **담당 채널:** 영업 담당자 1:1 전담 밀착 케어 (전화/방문 접촉)
-            * **권장 접촉 시점:** 계약 만료 **D-90일 전** 선제 상담 착수
-            * **현장 실행 오퍼 (Action Offer):**
+            * **담당 채널:** 영업 담당자 1:1 전담 케어 (전화/방문 접촉)
+            * **권장 접촉 시점 (Pilot):** 계약 만료 **D-90일 전** 선제 상담 착수
+            * **현장 실행 오퍼 (Pilot Action Offer):**
               1. **조건부 단가 할인:** 계약 연장(1~2년) 동의 시 단가 **3~5% 한정 할인** 결합
               2. **맞춤형 요금제 컨설팅:** 전력 사용 패턴 분석을 통한 주간/야간 선택형 요금제 변경 제안
               3. **VIP 케어 서비스:** **에너지 효율화 진단 리포트** 무료 제공으로 서비스 락인(Lock-in)
             """
         )
 
-elif "고위험" in sim_group or sim_score >= 0.4:
+elif sim_top_pct <= 10.0 or "주의" in sim_group:
     with st.container(border=True):
         st.markdown(
-            f"### 🟡 판정 등급: **Top 5% ~ 10% 고위험군** ({sim_icon} `{sim_score:.3f}pt`)"
+            f"### 🟡 관리 등급: **Top 5% ~ 10% 주의 관찰군** ({sim_icon} 위험도 `{sim_score:.3f}pt` / 상위 `{sim_top_pct:.1f}%`)"
         )
         st.markdown(
             """
-            **[⚡ Automated CRM 타겟 마케팅 프로토콜]**
+            **[⚡ Automated CRM 타겟 마케팅 프로토콜 (Pilot 가설)]**
 
             * **담당 채널:** CRM 자동화 마케팅 채널 (알림톡 / 이메일 / SMS)
-            * **권장 접촉 시점:** 계약 만료 **D-60일 전** 타겟 메시지 발송
-            * **현장 실행 오퍼 (Action Offer):**
+            * **권장 접촉 시점 (Pilot):** 계약 만료 **D-60일 전** 타겟 메시지 발송
+            * **현장 실행 오퍼 (Pilot Action Offer):**
               1. **재계약 할인 쿠폰:** CRM 발송을 통한 **[재계약 감사 단가 할인 쿠폰]** 즉시 전달
               2. **가격 민감도 방어:** 단기 가격 인상 부담 완화를 위한 **야간 요금 전환 옵션** 안내
               3. **타임리밋 프로모션:** "2주 이내 재계약 체결 시 혜택 확정" 조건으로 빠른 의사결정 유도
             """
         )
 
-elif "중위험" in sim_group or sim_score >= 0.2:
+elif sim_top_pct <= 20.0:
     with st.container(border=True):
         st.markdown(
-            f"### 🟢 판정 등급: **Top 10% ~ 20% 중위험군** ({sim_icon} `{sim_score:.3f}pt`)"
+            f"### 🟢 관리 등급: **Top 10% ~ 20% 중위험 관리군** ({sim_icon} 위험도 `{sim_score:.3f}pt` / 상위 `{sim_top_pct:.1f}%`)"
         )
         st.markdown(
             """
-            **[📱 Low-Cost 디지털 릴레이션십 프로토콜]**
+            **[📱 Low-Cost 디지털 릴레이션십 프로토콜 (Pilot 가설)]**
 
             * **담당 채널:** 디지털 앱 푸시 및 정기 이메일 뉴스레터
-            * **권장 접촉 시점:** 계약 만료 **D-30일 전** 정기 노출
-            * **현장 실행 오퍼 (Action Offer):**
+            * **권장 접촉 시점 (Pilot):** 계약 만료 **D-30일 전** 정기 노출
+            * **현장 실행 오퍼 (Pilot Action Offer):**
               1. **인포머티브 안내:** 무분별한 할인 대신 **계약 유지 시 제공되는 기본 부가 혜택** 안내
               2. **만족도 체크:** 정기 설문조사 연계를 통해 서비스 잠재 불만 요소 사전 파악
               3. **에너지 절감 팁:** 정기 모니터링 팁 전달을 통한 고객 브랜드 친밀도 유지
@@ -328,7 +335,7 @@ elif "중위험" in sim_group or sim_score >= 0.2:
 else:
     with st.container(border=True):
         st.markdown(
-            f"### 🔵 판정 등급: **안정군 / 저위험군** ({sim_icon} `{sim_score:.3f}pt`)"
+            f"### 🔵 관리 등급: **일반 관리 / 저위험군** ({sim_icon} 위험도 `{sim_score:.3f}pt` / 상위 `{sim_top_pct:.1f}%`)"
         )
         st.markdown(
             """
@@ -336,7 +343,19 @@ else:
 
             * **담당 채널:** 월간 정기 청구서 및 서비스 알림
             * **현장 실행 오퍼 (Action Offer):**
-              1. **마진율 보호:** 이탈 위험이 매우 낮으므로 **추가 가격 할인 프로모션 지양** (비용 절감)
+              1. **마진율 보호:** 이탈 위험이 낮으므로 **추가 가격 할인 프로모션 지양** (비용 절감)
               2. **기본 케어:** 신규 서비스 안내 및 월간 전력 사용량 분석 리포트 자동 발송
             """
         )
+
+# 💡 [핵심 보완 4] Pilot 가설 검증 필요성에 대한 비즈니스 경고 안내 박스
+st.markdown(
+    """
+    <div class="insight-box">
+    <b>💡 현장 적용 시 실행 가이드라인</b><br>
+    제시된 접촉 시점(D-90/60/30)과 할인 혜택은 **현장 적용을 위한 추천안(가이드라인)**입니다.<br>
+    전체 고객에게 즉시 적용하기보다 **일부 고객에게 먼저 시범 적용(소규모 테스트)하여 실제 이탈 방어 효과와 예산 대비 효율을 확인한 뒤 확대**하는 것을 권장합니다.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
