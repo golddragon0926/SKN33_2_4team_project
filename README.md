@@ -123,18 +123,38 @@ Streamlit 고객 위험 분석
 
 최종 Champion은 OOF PR-AUC와 Top 10% Lift가 가장 높은 **LightGBM**입니다.
 
+![모델별 OOF PR-AUC 비교](docs/images/modeling_report/01_oof_pr_auc_comparison.png)
+
+> OOF PR-AUC는 이탈 고객 비중이 낮은 불균형 데이터에서 각 모델이 실제 이탈 고객을 얼마나 효과적으로 상위 위험군에 배치하는지 비교하는 핵심 지표입니다.
+
 ### Champion Test 성능
 
-| 지표 | 결과 |
-| :--- | ---: |
-| PR-AUC | **0.3516** |
-| ROC-AUC | 0.7110 |
-| Precision | 0.2672 |
-| Recall | 0.4507 |
-| F1 | 0.3355 |
-| Top 10% Recall | **0.3521** |
-| Top 10% Lift | **3.5115** |
-| OOF 기준 분류 임계값 | 0.1305 |
+<table>
+  <tr>
+    <td width="40%" valign="top">
+      <table>
+        <thead>
+          <tr><th align="left">지표</th><th align="right">결과</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>PR-AUC</td><td align="right"><strong>0.3516</strong></td></tr>
+          <tr><td>ROC-AUC</td><td align="right">0.7110</td></tr>
+          <tr><td>Precision</td><td align="right">0.2672</td></tr>
+          <tr><td>Recall</td><td align="right">0.4507</td></tr>
+          <tr><td>F1</td><td align="right">0.3355</td></tr>
+          <tr><td>Top 10% Recall</td><td align="right"><strong>0.3521</strong></td></tr>
+          <tr><td>Top 10% Lift</td><td align="right"><strong>3.5115</strong></td></tr>
+          <tr><td>OOF 기준 분류 임계값</td><td align="right">0.1305</td></tr>
+        </tbody>
+      </table>
+    </td>
+    <td width="60%" valign="top">
+      <img src="docs/images/modeling_report/03_test_pr_curve.png" alt="최종 Test Precision-Recall Curve" width="100%">
+    </td>
+  </tr>
+</table>
+
+> 최종 Test PR-AUC는 0.3516으로 이탈률 기준선 약 0.097보다 높게 나타났습니다. 이는 LightGBM이 미사용 Test 데이터에서도 실제 이탈 고객을 상위 위험군에 배치하는 순위화 성능을 유지했음을 보여줍니다.
 
 Test 고객 중 예측 위험도 상위 10%를 우선 관리하면 전체 이탈 고객의 약 35.2%를 포함하며, 무작위 선정 대비 약 3.51배 높은 이탈 고객 밀도를 확보할 수 있습니다.
 
@@ -150,14 +170,28 @@ Test 고객 중 예측 위험도 상위 10%를 우선 관리하면 전체 이탈
 
 > 제한된 유지관리 인력과 예산으로 누구에게 먼저 연락해야 하는가?
 
-### 활용 방향
+### 고객 우선순위별 실행 전략
 
-- 고객별 예측 위험도 산출 및 위험도 순 정렬
-- 캠페인 가능 인원에 따라 Top 5%, 10%, 20% 고객 선정
-- 계약 종료·갱신 시점과 가격 민감도를 고려한 맞춤형 대응
-- 캠페인 결과를 수집해 임계값과 고객 관리 전략 개선
+| 운영 구간 | 구간 인원 및 Test 누적 성과 | 권장 채널·시점 | 세부 실행 방법 |
+| :--- | :--- | :--- | :--- |
+| **Top 5% 집중 대응군** | 구간 147명<br>Top 5% 누적: 이탈 고객 81명, Recall 28.5%, Lift 5.67 | 1:1 전담 상담<br>계약 만료 D-90 Pilot | <ol><li>계약·갱신 일정과 이탈 위험 신호 확인</li><li>고객 가치·마진을 반영해 혜택 범위 결정</li><li>맞춤 상담·선택적 재계약안을 제안하고 반응 기록</li></ol> |
+| **Top 5~10% CRM 대응군** | 추가 146명<br>Top 10% 누적: 293명 중 이탈 고객 100명, Recall 35.2%, Lift 3.51 | 알림톡·이메일<br>계약 만료 D-60 Pilot | <ol><li>갱신 안내·요금 옵션·절감 정보 자동 발송</li><li>열람·상담 신청·불만 등 고객 반응 수집</li><li>반응 고객을 1:1 상담으로 연결하고 Pilot 효과 검증</li></ol> |
+| **Top 10~20% 디지털 관리군** | 추가 292명<br>Top 20% 누적: 585명 중 이탈 고객 141명, Recall 49.6%, Lift 2.48 | 앱 푸시·뉴스레터·설문<br>계약 만료 D-30 Pilot | <ol><li>계약 만료·유지 혜택·에너지 정보 안내</li><li>만족도와 가격·서비스 관련 신규 신호 수집</li><li>부정적 반응 고객은 상위 대응 단계로 재분류</li></ol> |
 
-ROI와 캠페인 효과는 실제 운영 성과가 아니라 가정에 기반한 시뮬레이션이며, 운영 적용 전 고객 가치·캠페인 비용·방어 성공률을 별도로 검증해야 합니다. 고객 우선순위별 대응 체계, 주요 신호별 전략 및 ROI 가정은 [비즈니스 활용 및 이탈 방어 전략](docs/business_application.md)을 참고하세요.
+Top 20% 밖의 고객은 고비용 캠페인보다 정기적인 위험도 재산출과 신규 위험 신호 모니터링을 우선합니다.
+
+> 표의 Recall과 Lift는 각 개별 구간만의 성과가 아니라 **Top 5%, Top 10%, Top 20%까지 포함한 누적 Test 성과**입니다. D-90·D-60·D-30 접촉 시점과 할인·계약 조건은 모델이 검증한 최적값이 아닌 Pilot 가정이므로 A/B Test를 통해 효과와 비용을 확인해야 합니다.
+
+![고위험 상위 고객 비율별 이탈 고객 포착률](docs/images/modeling_report/06_test_topk_capture.png)
+
+> 관리 범위를 넓힐수록 더 많은 실제 이탈 고객을 포함하지만 고객당 선별 효율은 낮아질 수 있습니다. 따라서 상담 인력과 예산에 맞춰 Top-K 범위를 결정합니다.
+
+### Streamlit 연계
+
+- **모델·유지전략:** 관리 대상 고객 비율을 5~50% 범위에서 조절하며 대상 고객 수, 실제 이탈 고객 포착률과 Lift를 비교합니다.
+- **고객 위험 분석:** 개별 고객의 주요 예측 신호를 조절해 변경 전·후 모델 위험도 점수를 비교하고 상담 시 확인할 항목을 탐색합니다.
+
+Streamlit의 What-If 결과는 입력값 변화에 따른 모델 점수의 민감도이며, 해당 조건을 실제로 변경했을 때 이탈이 감소한다는 인과적 효과를 의미하지 않습니다. ROI와 캠페인 효과 역시 실제 운영 성과가 아니므로 고객 가치·캠페인 비용·방어 성공률을 별도로 검증해야 합니다. 자세한 실행 기준과 ROI 가정은 [비즈니스 활용 및 이탈 방어 전략](docs/business_application.md)을 참고하세요.
 
 ---
 
