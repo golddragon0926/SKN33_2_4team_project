@@ -17,6 +17,7 @@ st.set_page_config(
 
 inject_common_css()
 
+
 def get_app_navigation(show_home_func):
     return st.navigation(
         {
@@ -25,11 +26,12 @@ def get_app_navigation(show_home_func):
             ],
             "ANALYSIS": [
                 st.Page("pages/1_Dashboard.py", title="고객 데이터 인사이트", icon="📊"),
-                st.Page("pages/2_Model_Performance.py", title="모델 성능 평가 및 검증", icon="🤖"),
-                st.Page("pages/3_Realtime_Prediction.py", title="실시간 예측 · 마케팅 전략", icon="🎯"),
+                st.Page("pages/2_Model_Performance.py", title="모델 성능 평가", icon="🤖"),
+                st.Page("pages/3_Realtime_Prediction.py", title="실시간 예측 & 마케팅 전략", icon="🎯"),
             ],
         }
     )
+
 
 def show_home() -> None:
     st.title("⚡ PowerCo 고객 이탈 분석")
@@ -42,7 +44,6 @@ def show_home() -> None:
     overview_file = get_eda_path("dataset_overview.csv")
     champion_file = get_model_path("champion_summary.csv")
 
-    # 💡 어떤 파일이 없는지 개별적으로 세밀하게 체크!
     try:
         overview_df = load_csv(overview_file)
     except FileNotFoundError:
@@ -80,49 +81,39 @@ def show_home() -> None:
     # 1번 카드: 1_Dashboard.py 연동
     with col_guide1:
         with st.container(border=True):
-            st.markdown(
-                "<h4 style='text-align: center; margin-bottom: 12px;'>📊 1. 고객 데이터 인사이트</h4>",
-                unsafe_allow_html=True,
-            )
+            st.markdown("#### 📊 1. 고객 데이터 인사이트")
             st.write(
                 "전체 고객 데이터의 이탈 비중과 특성(Feature) 카테고리별 패턴 및 계약 만료 교차 분석 결과를 살펴봅니다."
             )
-            st.write("")  # 여백 맞춤용
             if st.button(
-                    "데이터 인사이트 보기 ➔", key="btn_p1", use_container_width=True
+                    "고객 데이터 인사이트 보기 ➔", key="btn_p1", use_container_width=True
             ):
                 st.switch_page("pages/1_Dashboard.py")
 
-    # 2번 카드: 2_Model_Performance.py 연동 (제목 및 설명 정돈)
+    # 2번 카드: 2_Model_Performance.py 연동
     with col_guide2:
         with st.container(border=True):
-            st.markdown(
-                "<h4 style='text-align: center; margin-bottom: 12px;'>🤖 2. AI 모델 성능 평가 및 검증</h4>",
-                unsafe_allow_html=True,
-            )
+            st.markdown("#### 🤖 2. AI 모델 성능 평가")
             st.write(
                 "후보 알고리즘 비교, PR Curve, 교차검증 지표 및 파생변수 추가에 따른 예측 성능 개선 효과를 검증합니다."
             )
-            st.write("")
             if st.button(
-                    "모델 성능 분석 보기 ➔", key="btn_p2", use_container_width=True
+                    "모델 성능 평가 및 검증 보기 ➔", key="btn_p2", use_container_width=True
             ):
                 st.switch_page("pages/2_Model_Performance.py")
 
-        # 3번 카드: 3_Realtime_Prediction.py 연동
-        with col_guide3:
-            with st.container(border=True):
-                st.markdown(
-                    "<h4 style='text-align: center; margin-bottom: 12px;'>🎯 3. 실시간 예측 & 마케팅 전략</h4>",
-                    unsafe_allow_html=True,
-                )
-                st.write(
-                    "개별 고객 조건 변경 시 위험도 변동을 실시간 측정하고, 진단 등급에 따른 맞춤형 현장 대응 전략을 확인합니다."
-                )
-                st.write("")
-                if st.button(
-                        "위험 시뮬레이션 실행 ➔", key="btn_p3", use_container_width=True
-                ):
-                    st.switch_page("pages/3_Realtime_Prediction.py")
+    # 3번 카드: 3_Realtime_Prediction.py 연동
+    with col_guide3:
+        with st.container(border=True):
+            st.markdown("#### 🎯 3. 실시간 예측 & 마케팅 전략")
+            st.write(
+                "개별 고객 조건 변경 시 위험도 변동을 실시간 측정하고, 진단 등급에 따른 맞춤형 현장 대응 전략을 확인합니다."
+            )
+            if st.button(
+                    "실시간 예측 & 전략 보기 ➔", key="btn_p3", use_container_width=True
+            ):
+                st.switch_page("pages/3_Realtime_Prediction.py")
+
+
 pg = get_app_navigation(show_home)
 pg.run()

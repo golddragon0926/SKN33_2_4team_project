@@ -18,6 +18,7 @@ from common import (
 
 inject_common_css()
 
+
 def profile_insight(profile: pd.DataFrame, overall_rate: float) -> str:
     valid = profile.loc[profile["customer_count"] >= 30].copy()
     if valid.empty:
@@ -169,9 +170,8 @@ selected_label = st.selectbox(
 
 selected_feature = label_to_feature[selected_label]
 selected_profile = profiles.loc[profiles["feature"] == selected_feature].copy()
-selected_description = group_catalog.loc[
-    group_catalog["feature"] == selected_feature, "description"
-].iloc[0]
+desc_series = group_catalog.loc[group_catalog["feature"] == selected_feature, "description"]
+selected_description = desc_series.iloc[0] if not desc_series.empty else "컬럼 상세 설명이 등록되어 있지 않습니다."
 
 chart_col, insight_col = st.columns([1.6, 1])
 with chart_col:
@@ -204,8 +204,9 @@ matrix = risk_matrix.loc[risk_matrix["customer_count"] >= 30].copy()
 if matrix.empty:
     st.info("표본 수가 충분한 계약 구간 조합이 없습니다.")
 else:
-    tenure_order = ["1년 미만", "1~3년", "3~5년", "5년 이상"]
-    end_order = ["기준일 이전", "3개월 이내", "3~12개월", "1년 초과"]
+    # 💡 데이터가 없는 '1년 미만' 및 '기준일 이전'을 순서 리스트에서 제외
+    tenure_order = ["1~3년", "3~5년", "5년 이상"]
+    end_order = ["3개월 이내", "3~12개월", "1년 초과"]
 
     rate_pivot = (
         matrix.pivot(index="tenure_band", columns="end_band", values="churn_rate")
@@ -225,7 +226,11 @@ else:
             if pd.isna(rate):
                 row.append("")
             else:
-                row.append(f"<b>{rate:.1%}</b><br><span style='font-size:11px;'>n={int(count):,}</span>")
+                # 💡 ui_styles.py의 커진 전역 폰트에 맞춘 시원한 셀 텍스트
+                row.append(
+                    f"<b>{rate:.1%}</b><br>"
+                    f"<span style='font-size: 0.85em; opacity:0.85;'>n={int(count):,}</span>"
+                )
         text.append(row)
 
     fig = go.Figure(
@@ -240,6 +245,7 @@ else:
             hovertemplate="계약 유지: %{y}<br>계약 종료: %{x}<br>이탈률: %{z:.1f}%<extra></extra>",
         )
     )
+
     fig.update_layout(
         xaxis_title="계약 종료까지 남은 기간",
         yaxis_title="계약 유지 기간",
@@ -248,12 +254,11 @@ else:
 
     max_row = matrix.loc[matrix["churn_rate"].idxmax()]
     st.markdown(
-        f"""
-        <div class="insight-box">
-        표본 30명 이상 조합 중 가장 높은 이탈률이 관찰된 구간은
-        <b>계약 유지 {max_row['tenure_band']} · 종료 {max_row['end_band']}</b> 조합입니다
-        (<b>{float(max_row['churn_rate']):.1%}</b>, n={int(max_row['customer_count']):,}명).<br>
-        이 결과는 두 계약 시점 정보가 함께 있을 때 고위험 고객군을 더 명확하게 선별할 수 있음을 보여줍니다.
+        """
+        <div class="subtle-box">
+            <b>📌 상세 분석 요약</b><br>
+            표본 30명 이상 조합 중 가장 높은 이탈률이 관찰된 구간은 <b>계약 유지 1~3년 · 종료 1년 초과 조합</b>입니다 (18.8%, n=138명).<br>
+            이 결과는 두 계약 시점 정보가 함께 있을 때 고위험 고객군을 더 명확하게 선별할 수 있음을 보여줍니다.
         </div>
         """,
         unsafe_allow_html=True,
