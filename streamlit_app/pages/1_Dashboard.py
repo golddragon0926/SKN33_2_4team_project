@@ -73,8 +73,7 @@ def plot_profile(profile: pd.DataFrame, overall_rate: float, title: str):
 
 st.title("📊 고객 데이터 인사이트")
 st.caption(
-    "모델 결과를 사용하지 않고, Train 데이터를 기준으로 컬럼별 이탈 패턴을 먼저 살펴봅니다. "
-    "그래프는 원인 증명이 아니라 모델링 전에 발견한 연관 패턴입니다."
+    "Train 데이터 세트를 기준으로 주요 컬럼별 이탈 패턴 및 고객군 특성을 다각도로 분석합니다."
 )
 
 # 1. EDA 관련 데이터 파일 안전 로드
@@ -109,7 +108,7 @@ st.markdown("---")
 # ------------------------------------------
 # Section 1: 전체 이탈 고객 비중
 # ------------------------------------------
-st.subheader("1. 먼저 확인한 것: 이탈 고객은 얼마나 많은가?")
+st.subheader("1. 전체 이탈 고객 비중 분석")
 left, right = st.columns([1.3, 1])
 
 with left:
@@ -133,11 +132,9 @@ with right:
     st.markdown(
         f"""
         <div class="insight-box">
-        <b>왜 중요한가?</b><br><br>
+        <b>💡 분석 포인트</b><br><br>
         전체 고객 중 이탈 고객은 약 <b>{overall_rate:.1%}</b>입니다.<br>
-        유지 고객이 훨씬 많기 때문에 단순 정확도만 보면 모델 성능을 과대평가할 수 있습니다.<br><br>
-        따라서 이후 모델 비교에서는 <b>PR-AUC</b>를 핵심 지표로 사용하고,
-        실제 운영에서는 <b>고위험 고객을 얼마나 잘 우선 선별하는지</b>를 함께 봅니다.
+        유지 고객 비중이 매우 높은 클래스 불균형 구조이므로 단순 정확도 대신 <b>PR-AUC</b>를 핵심 평가 지표로 채택했습니다.
         </div>
         """,
         unsafe_allow_html=True,
@@ -148,27 +145,28 @@ st.markdown("---")
 # ------------------------------------------
 # Section 2: 컬럼별 이탈 패턴 탐색
 # ------------------------------------------
-st.subheader("2. 컬럼별로 어떤 이탈 패턴이 보였나?")
+st.subheader("2. 주요 특성(Feature)별 이탈 패턴 탐색")
 st.write(
-    "보고 싶은 컬럼을 선택하면 값이 낮은 고객부터 높은 고객까지 구간을 나눠 이탈률을 비교합니다. "
-    "범주형 컬럼은 범주별로 비교합니다."
+    "특성 카테고리와 컬럼을 선택하여 수치 구간별(또는 범주별) 이탈률 분포 차이를 비교합니다."
 )
 
 group_order = ["고객 특성", "소비·수익", "계약 생애주기", "변화 신호"]
 available_groups = [g for g in group_order if g in catalog["feature_group"].unique()]
 
-st.caption("📌 탐색할 컬럼의 그룹 카테고리를 선택하세요:")
 selected_group = st.radio(
-    "분석 주제",
+    "📂 **분석할 특성 카테고리**",
     available_groups,
     horizontal=True,
-    label_visibility="collapsed",
 )
 
 group_catalog = catalog.loc[catalog["feature_group"] == selected_group].copy()
 label_to_feature = dict(zip(group_catalog["feature_label"], group_catalog["feature"]))
 
-selected_label = st.selectbox("확인할 컬럼", list(label_to_feature))
+selected_label = st.selectbox(
+    "🔍 **상세 탐색 컬럼**",
+    list(label_to_feature)
+)
+
 selected_feature = label_to_feature[selected_label]
 selected_profile = profiles.loc[profiles["feature"] == selected_feature].copy()
 selected_description = group_catalog.loc[
@@ -183,14 +181,13 @@ with chart_col:
     )
 
 with insight_col:
-    st.markdown("#### 이 컬럼은 무엇인가?")
+    st.markdown("#### 💡 컬럼 정의")
     st.write(selected_description)
-    st.markdown("#### 그래프에서 보이는 점")
+    st.markdown("#### 📊 이탈 패턴 분석")
     st.info(profile_insight(selected_profile, overall_rate))
     if selected_feature in {"channel_sales", "origin_up"}:
         st.caption(
-            "💡 원본 데이터의 익명화된 코드값은 읽기 쉽게 빈도순 '판매 채널 1, 2…' 또는 "
-            "'유입 경로 1, 2…'로 표시했습니다. 숫자 순서 자체에 의미는 없습니다."
+            "💡 익명화된 코드값은 빈도순 '판매 채널 1, 2…' 또는 '유입 경로 1, 2…'로 표준화하여 표기했습니다."
         )
 
 st.markdown("---")
@@ -198,10 +195,9 @@ st.markdown("---")
 # ------------------------------------------
 # Section 3: 계약 유지 기간 x 종료 시점 교차 분석 (Heatmap)
 # ------------------------------------------
-st.subheader("3. 계약 기간과 종료 시점을 함께 보면?")
+st.subheader("3. 계약 기간 및 만료 시점 교차 분석")
 st.write(
-    "한 컬럼만 보는 대신, **계약을 얼마나 오래 유지했는지**와 "
-    "**계약 종료까지 얼마나 남았는지**를 함께 묶어 실제 이탈률을 비교합니다."
+    "계약 유지 기간과 계약 종료 잔여 기간을 조합하여 고위험 고객 세그먼트를 다차원 세분화합니다."
 )
 
 matrix = risk_matrix.loc[risk_matrix["customer_count"] >= 30].copy()
@@ -268,13 +264,13 @@ st.markdown("---")
 # ------------------------------------------
 # Section 4: 가격 변화와 이탈률
 # ------------------------------------------
-st.subheader("4. 최근 가격 변화와 이탈률")
+st.subheader("4. 단기 가격 변동성 영향 분석")
 
 price_candidates = {
-    "에너지 가격 변화": "off_peak_energy_recent_change_rate",
-    "전력 가격 변화": "off_peak_power_recent_change_rate",
+    "에너지 가격 변화율": "off_peak_energy_recent_change_rate",
+    "전력 가격 변화율": "off_peak_power_recent_change_rate",
 }
-price_label = st.selectbox("가격 변화 기준", list(price_candidates))
+price_label = st.selectbox("📌 **가격 변동성 기준 선택**", list(price_candidates))
 price_feature = price_candidates[price_label]
 price_profile = profiles.loc[profiles["feature"] == price_feature].copy()
 
@@ -284,19 +280,15 @@ if not price_profile.empty:
         use_container_width=True,
     )
     st.info(profile_insight(price_profile, overall_rate))
-    st.caption(
-        "💡 가격 변화가 이탈의 직접 원인이라고 단정하는 그래프가 아닙니다. "
-        "가격 변화 구간별로 관찰된 이탈률 차이를 확인한 것입니다."
-    )
 
 # ------------------------------------------
-# Expander: 데이터 전처리 과정 요약
+# Expander: 데이터 품질 및 전처리 파이프라인
 # ------------------------------------------
-with st.expander("🔍 데이터 품질과 전처리 과정 자세히 보기"):
-    st.markdown("#### 결측치가 많은 Feature")
+with st.expander("🔍 데이터 품질 및 전처리 파이프라인 상세 보기"):
+    st.markdown("#### 결측치 발생 현황")
     top_missing = missing.loc[missing["missing_count"] > 0].head(10).copy()
     if top_missing.empty:
-        st.write("최종 Train 데이터에 결측 Feature가 없습니다.")
+        st.write("최종 Train 데이터 세트에 결측 항목이 존재하지 않습니다.")
     else:
         top_missing["결측률"] = top_missing["missing_rate"].map(lambda x: f"{x:.1%}")
         st.dataframe(
@@ -306,15 +298,12 @@ with st.expander("🔍 데이터 품질과 전처리 과정 자세히 보기"):
             hide_index=True,
             use_container_width=True,
         )
-        st.caption(
-            "💡 결측 행을 임의로 삭제하지 않고, 실제 모델 학습에서는 각 CV Fold 내부에서만 결측 대체를 수행합니다."
-        )
 
-    st.markdown("#### 데이터가 모델 입력으로 만들어지는 순서")
+    st.markdown("#### 데이터 파이프라인 및 Feature 생성 구조")
     st.dataframe(flow, hide_index=True, use_container_width=True)
     a0_count = int(float(metric_value(a3_overview, "a0_feature_count", 0)))
     a3_count = int(float(metric_value(a3_overview, "a3_feature_count", 0)))
     added = int(float(metric_value(a3_overview, "added_contract_features", 0)))
     st.caption(
-        f"A0 {a0_count}개 Feature에 계약 생애주기 Feature {added}개를 추가해 최종 A3 {a3_count}개 Feature를 구성했습니다."
+        f"A0 {a0_count}개 변수 기반에 계약 생애주기 파생변수 {added}개를 신규 생성 및 병합하여 최종 A3 {a3_count}개 변수를 확정했습니다."
     )
