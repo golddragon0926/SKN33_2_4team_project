@@ -71,7 +71,9 @@ LightGBM Champion 선정
         ↓
 고정 임계값 기반 Test 평가
         ↓
-Streamlit 고객 위험 분석
+Streamlit 모델 성능 평가
+        ↓
+Streamlit 실시간 예측 & 마케팅 전략
 ```
 
 ---
@@ -113,17 +115,34 @@ Streamlit 고객 위험 분석
 
 ### 후보 모델 OOF 성능
 
-| 모델 | OOF PR-AUC | F1 | Top 10% Lift |
-| :--- | ---: | ---: | ---: |
-| **LightGBM** | **0.3172** | **0.3263** | **3.2847** |
-| XGBoost | 0.2717 | 0.3038 | 3.0381 |
-| Random Forest | 0.2367 | 0.2761 | 2.5626 |
-| Logistic Regression | 0.1788 | 0.2590 | 2.3600 |
-| Dummy | 0.0971 | 0.1771 | 1.0000 |
+<table>
+  <tr>
+    <td width="52%" valign="top">
+      <table>
+        <thead>
+          <tr>
+            <th align="left">모델</th>
+            <th align="right">OOF PR-AUC</th>
+            <th align="right">F1</th>
+            <th align="right">Top 10% Lift</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>LightGBM</strong></td><td align="right"><strong>0.3172</strong></td><td align="right"><strong>0.3263</strong></td><td align="right"><strong>3.2847</strong></td></tr>
+          <tr><td>XGBoost</td><td align="right">0.2717</td><td align="right">0.3038</td><td align="right">3.0381</td></tr>
+          <tr><td>Random Forest</td><td align="right">0.2367</td><td align="right">0.2761</td><td align="right">2.5626</td></tr>
+          <tr><td>Logistic Regression</td><td align="right">0.1788</td><td align="right">0.2590</td><td align="right">2.3600</td></tr>
+          <tr><td>Dummy</td><td align="right">0.0971</td><td align="right">0.1771</td><td align="right">1.0000</td></tr>
+        </tbody>
+      </table>
+    </td>
+    <td width="48%" valign="top">
+      <img src="docs/images/modeling_report/01_oof_pr_auc_comparison.png" alt="모델별 OOF PR-AUC 비교" width="100%">
+    </td>
+  </tr>
+</table>
 
 최종 Champion은 OOF PR-AUC와 Top 10% Lift가 가장 높은 **LightGBM**입니다.
-
-![모델별 OOF PR-AUC 비교](docs/images/modeling_report/01_oof_pr_auc_comparison.png)
 
 > OOF PR-AUC는 이탈 고객 비중이 낮은 불균형 데이터에서 각 모델이 실제 이탈 고객을 얼마나 효과적으로 상위 위험군에 배치하는지 비교하는 핵심 지표입니다.
 
@@ -174,9 +193,9 @@ Test 고객 중 예측 위험도 상위 10%를 우선 관리하면 전체 이탈
 
 | 운영 구간 | 구간 인원 및 Test 누적 성과 | 권장 채널·시점 | 세부 실행 방법 |
 | :--- | :--- | :--- | :--- |
-| **Top 5% 집중 대응군** | 구간 147명<br>Top 5% 누적: 이탈 고객 81명, Recall 28.5%, Lift 5.67 | 1:1 전담 상담<br>계약 만료 D-90 Pilot | <ol><li>계약·갱신 일정과 이탈 위험 신호 확인</li><li>고객 가치·마진을 반영해 혜택 범위 결정</li><li>맞춤 상담·선택적 재계약안을 제안하고 반응 기록</li></ol> |
-| **Top 5~10% CRM 대응군** | 추가 146명<br>Top 10% 누적: 293명 중 이탈 고객 100명, Recall 35.2%, Lift 3.51 | 알림톡·이메일<br>계약 만료 D-60 Pilot | <ol><li>갱신 안내·요금 옵션·절감 정보 자동 발송</li><li>열람·상담 신청·불만 등 고객 반응 수집</li><li>반응 고객을 1:1 상담으로 연결하고 Pilot 효과 검증</li></ol> |
-| **Top 10~20% 디지털 관리군** | 추가 292명<br>Top 20% 누적: 585명 중 이탈 고객 141명, Recall 49.6%, Lift 2.48 | 앱 푸시·뉴스레터·설문<br>계약 만료 D-30 Pilot | <ol><li>계약 만료·유지 혜택·에너지 정보 안내</li><li>만족도와 가격·서비스 관련 신규 신호 수집</li><li>부정적 반응 고객은 상위 대응 단계로 재분류</li></ol> |
+| **Top 5% 집중 대응군** | 구간 147명<br>Top 5% 누적: 이탈 고객 81명, Recall 28.5%, Lift 5.67 | 영업 담당자 1:1 전담 케어(전화·방문)<br>계약 만료 D-90 Pilot | <ol><li>계약·갱신 일정과 이탈 위험 신호 확인</li><li>고객 가치·마진을 반영해 혜택 범위 결정</li><li>맞춤 요금제·에너지 효율 상담·선택적 재계약안을 제안하고 반응 기록</li></ol> |
+| **Top 5~10% CRM 대응군** | 추가 146명<br>Top 10% 누적: 293명 중 이탈 고객 100명, Recall 35.2%, Lift 3.51 | CRM 자동화(알림톡·이메일·SMS)<br>계약 만료 D-60 Pilot | <ol><li>재계약 안내·할인 쿠폰·야간 요금 옵션 자동 발송</li><li>열람·상담 신청·불만 등 고객 반응 수집</li><li>반응 고객을 1:1 상담으로 연결하고 기한부 제안의 Pilot 효과 검증</li></ol> |
+| **Top 10~20% 디지털 관리군** | 추가 292명<br>Top 20% 누적: 585명 중 이탈 고객 141명, Recall 49.6%, Lift 2.48 | 디지털 채널(앱 푸시·이메일 뉴스레터)<br>계약 만료 D-30 Pilot | <ol><li>계약 만료·유지 혜택·에너지 절감 정보 안내</li><li>만족도와 가격·서비스 관련 신규 신호 수집</li><li>부정적 반응 고객은 상위 대응 단계로 재분류</li></ol> |
 
 Top 20% 밖의 고객은 고비용 캠페인보다 정기적인 위험도 재산출과 신규 위험 신호 모니터링을 우선합니다.
 
@@ -188,10 +207,10 @@ Top 20% 밖의 고객은 고비용 캠페인보다 정기적인 위험도 재산
 
 ### Streamlit 연계
 
-- **모델·유지전략:** 관리 대상 고객 비율을 5~50% 범위에서 조절하며 대상 고객 수, 실제 이탈 고객 포착률과 Lift를 비교합니다.
-- **고객 위험 분석:** 개별 고객의 주요 예측 신호를 조절해 변경 전·후 모델 위험도 점수를 비교하고 상담 시 확인할 항목을 탐색합니다.
+- **모델 성능 평가:** 후보 알고리즘, PR Curve, OOF·Test 지표, Top-K 포착 효율, Feature Engineering 개선 효과와 Feature Importance를 확인합니다.
+- **실시간 예측 & 마케팅 전략:** 개별 고객의 주요 예측 신호를 조절해 변경 전·후 위험도 점수와 기준 고객군 대비 `top_percent`를 비교하고, Top 5%·5~10%·10~20%별 Pilot 대응 카드를 확인합니다.
 
-Streamlit의 What-If 결과는 입력값 변화에 따른 모델 점수의 민감도이며, 해당 조건을 실제로 변경했을 때 이탈이 감소한다는 인과적 효과를 의미하지 않습니다. ROI와 캠페인 효과 역시 실제 운영 성과가 아니므로 고객 가치·캠페인 비용·방어 성공률을 별도로 검증해야 합니다. 자세한 실행 기준과 ROI 가정은 [비즈니스 활용 및 이탈 방어 전략](docs/business_application.md)을 참고하세요.
+Streamlit의 What-If 결과는 입력값 변화에 따른 모델 점수의 민감도이며, 해당 조건을 실제로 변경했을 때 이탈이 감소한다는 인과적 효과를 의미하지 않습니다. 화면의 D-90·D-60·D-30 접촉 시점과 할인·재계약 조건도 운영 가안이므로 소규모 Pilot과 A/B Test로 효과를 확인해야 합니다. ROI와 캠페인 효과 역시 실제 운영 성과가 아니므로 고객 가치·캠페인 비용·방어 성공률을 별도로 검증해야 합니다. 자세한 실행 기준과 ROI 가정은 [비즈니스 활용 및 이탈 방어 전략](docs/business_application.md)을 참고하세요.
 
 ---
 
@@ -277,10 +296,10 @@ python -m streamlit run streamlit_app/app.py
 
 | 화면 | 주요 기능 |
 | :--- | :--- |
-| **홈** | 프로젝트 소개와 핵심 메뉴 안내 |
-| **고객 데이터 인사이트** | 이탈 비중, 주요 특성별 패턴, 계약 기간·만료 시점 및 단기 가격 변동 분석 |
-| **모델·유지전략** | 알고리즘 비교, PR Curve, 타겟 마케팅 용량별 포착 효율, Test 성능 및 Feature Importance |
-| **고객 위험 분석** | 고객 선택 및 핵심 요인 조절을 통한 변경 전·후 위험도 What-If 시뮬레이션 |
+| **🏠 홈** | 프로젝트 소개와 핵심 메뉴 안내 |
+| **📊 고객 데이터 인사이트** | 이탈 비중, 주요 특성별 패턴, 계약 기간·만료 시점 및 단기 가격 변동 분석 |
+| **🤖 모델 성능 평가** | 후보 알고리즘 비교, PR Curve, OOF·Test 성능, Top-K 포착 효율, Feature Engineering 개선 효과 및 Feature Importance |
+| **🎯 실시간 예측 & 마케팅 전략** | 개별 고객 What-If 시뮬레이션, 상대적 위험 순위 확인 및 Top 5%·5~10%·10~20%별 Pilot 대응 전략 안내 |
 
 ---
 
