@@ -29,6 +29,7 @@ python modeling/evaluate.py
 from __future__ import annotations
 
 from pathlib import Path
+import json
 from typing import Any
 
 import joblib
@@ -269,6 +270,148 @@ def _export_feature_importance(
         artifacts_dir / "lightgbm_feature_importance.csv",
     )
 
+
+
+def _export_champion_prediction_bundle(
+    root: Path,
+    champion: str,
+    fixed_threshold: float,
+    predictions: pd.DataFrame | None,
+) -> tuple[Path, Path] | None:
+    """
+    실제 예측에 필요한 항목을 하나의 Champion Bundle로 저장한다.
+
+    포함 정보
+    - 전처리기 + 모델이 결합된 Pipeline
+    - 학습 당시 Feature 순서
+    - OOF에서 확정한 threshold
+    - 범주형 Feature
+    - 기준 고객군 Top 10% cutoff
+
+    Streamlit과 외부 예측 코드는 models/champion_bundle.joblib만 로드한다.
+    """
+    model_path = (
+        root
+        / "models"
+        / f"{champion}_pipeline.joblib"
+    )
+    if not model_path.exists():
+        return None
+
+    pipeline = joblib.load(model_path)
+
+    expected = getattr(
+        pipeline,
+        "feature_names_in_",
+        None,
+    )
+
+    if expected is None:
+        train_path = (
+            root
+            / "data"
+            / "processed"
+            / "train.csv"
+        )
+        train = pd.read_csv(
+            train_path,
+            nrows=1,
+        )
+        feature_names = [
+            col
+            for col in train.columns
+            if col not in {
+                ID_COL,
+                TARGET_COL,
+            }
+        ]
+    else:
+        feature_names = [
+            str(col)
+            for col in expected
+        ]
+
+    if not feature_names:
+        raise ValueError(
+            "Champion Bundle에 저장할 Feature 순서를 확인할 수 없습니다."
+        )
+
+    top10_cutoff = None
+    if (
+        predictions is not None
+        and len(predictions)
+        and "predicted_probability"
+        in predictions.columns
+    ):
+        top10_cutoff = float(
+            pd.to_numeric(
+                predictions["predicted_probability"],
+                errors="coerce",
+            )
+            .dropna()
+            .quantile(0.90)
+        )
+
+    bundle = {
+        "model_name": champion,
+        "pipeline": pipeline,
+        "feature_names": feature_names,
+        "feature_count": len(feature_names),
+        "threshold": float(
+            fixed_threshold
+        ),
+        "top10_cutoff": top10_cutoff,
+        "id_column": ID_COL,
+        "target_column": TARGET_COL,
+        "categorical_features": list(
+            CATEGORICAL_COLS
+        ),
+        "score_interpretation": (
+            "고객 간 우선순위를 위한 예측 위험도 점수. "
+            "별도의 확률 보정 없이 실제 이탈 확률로 단정하지 않음."
+        ),
+        "reference_score_artifact": (
+            "artifacts/champion_test_predictions.csv"
+        ),
+    }
+
+    models_dir = root / "models"
+    models_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    bundle_path = (
+        models_dir
+        / "champion_bundle.joblib"
+    )
+    joblib.dump(
+        bundle,
+        bundle_path,
+    )
+
+    metadata = {
+        key: value
+        for key, value
+        in bundle.items()
+        if key != "pipeline"
+    }
+    metadata_path = (
+        models_dir
+        / "champion_metadata.json"
+    )
+    with metadata_path.open(
+        "w",
+        encoding="utf-8",
+    ) as file:
+        json.dump(
+            metadata,
+            file,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    return bundle_path, metadata_path
 
 def _export_evaluation_artifacts(
     root: Path,
@@ -1266,6 +1409,17 @@ def main() -> None:
             f"[경고] {champion_model_path.name} 없음 -> "
             "Test 평가를 건너뜁니다."
         )
+
+    bundle_paths = _export_champion_prediction_bundle(
+        root=root,
+        champion=champion,
+        fixed_threshold=fixed_threshold,
+        predictions=predictions,
+    )
+    if bundle_paths is not None:
+        bundle_path, metadata_path = bundle_paths
+        print(f"Champion Bundle 저장 완료: {bundle_path}")
+        print(f"Champion Metadata 저장 완료: {metadata_path}")
 
     evaluation_artifact_dir = _export_evaluation_artifacts(
         root=root,

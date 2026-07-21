@@ -1,60 +1,25 @@
 from pathlib import Path
+import sys
 
-import joblib
-import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-MODEL_DIR = PROJECT_ROOT / "artifacts"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.predict import (
+    explain_customer,
+    get_prediction_metadata,
+    predict_customer,
+)
+
+
 EDA_DIR = PROJECT_ROOT / "artifacts" / "eda"
-NAVY = "#17324d"
-ORANGE = "#f59e0b"
 RED = "#c2413b"
 GREEN = "#2f855a"
-
-FEATURE_LABELS = {
-    "channel_sales": "판매 채널",
-    "has_gas": "가스 상품 보유 여부",
-    "origin_up": "계약 유입 경로",
-    "cons_12m": "최근 12개월 전기 소비량",
-    "cons_gas_12m": "최근 12개월 가스 소비량",
-    "cons_last_month": "최근 1개월 전기 소비량",
-    "forecast_cons_12m": "향후 12개월 예측 소비량",
-    "forecast_cons_year": "다음 연도 예측 소비량",
-    "forecast_discount_energy": "예측 에너지 할인 수준",
-    "forecast_meter_rent_12m": "예측 계량기 임대료",
-    "forecast_price_energy_off_peak": "예측 비첨두 에너지 가격",
-    "forecast_price_energy_peak": "예측 첨두 에너지 가격",
-    "forecast_price_pow_off_peak": "예측 비첨두 전력 가격",
-    "imp_cons": "현재 유료 소비 관련 값",
-    "margin_net_pow_ele": "전력 계약 순마진",
-    "nb_prod_act": "활성 상품 수",
-    "net_margin": "고객 순마진",
-    "num_years_antig": "고객 유지 연차",
-    "pow_max": "최대 계약전력",
-    "contract_end_within_3m": "3개월 내 계약 종료 예정",
-    "recent_consumption_change_log": "최근 소비 변화",
-    "off_peak_energy_recent_change_rate": "최근 에너지 가격 변화",
-    "off_peak_power_recent_change_rate": "최근 전력 가격 변화",
-    "forecast_off_peak_energy_change": "예측 에너지 가격 변화",
-    "forecast_off_peak_power_change": "예측 전력 가격 변화",
-    "contract_tenure_days": "계약 유지 기간",
-    "total_contract_days": "전체 계약 기간",
-    "days_until_contract_end": "계약 종료까지 남은 기간",
-    "days_until_renewal": "계약 갱신까지 남은 기간",
-    "days_since_product_modification": "상품 변경 후 경과 기간",
-    "renewal_end_gap_days": "갱신일-계약종료일 간격",
-    "modified_within_3m": "최근 3개월 내 상품 변경",
-    "renewal_within_3m": "3개월 내 갱신 예정",
-    "contract_age_ratio": "계약 생애주기 진행률",
-    "contract_end_before_reference": "기준일 이전 계약 종료",
-    "renewal_before_reference": "기준일 이전 갱신",
-    "modification_after_reference": "기준일 이후 상품 변경일",
-}
-CATEGORICAL_COLS = ["channel_sales", "has_gas", "origin_up"]
 
 
 @st.cache_data
@@ -65,50 +30,8 @@ def load_csv(path: Path) -> pd.DataFrame:
 
 
 @st.cache_resource
-def load_model(champion_name: str):
-    path = PROJECT_ROOT / "models" / f"{champion_name}_pipeline.joblib"
-    if not path.exists():
-        raise FileNotFoundError(f"최종 모델 파일이 없습니다: {path}")
-    return joblib.load(path)
-
-
-def original_feature_name(transformed_name: str) -> str:
-    clean = transformed_name.split("__", 1)[-1]
-    if clean.startswith("missingindicator_"):
-        clean = clean.replace("missingindicator_", "", 1)
-    for col in CATEGORICAL_COLS:
-        if clean == col or clean.startswith(f"{col}_"):
-            return col
-    return clean
-
-
-def local_contributions(pipe, input_df: pd.DataFrame) -> pd.DataFrame:
-    if not hasattr(pipe, "named_steps"):
-        return pd.DataFrame()
-    prep = pipe.named_steps.get("prep")
-    clf = pipe.named_steps.get("clf")
-    booster = getattr(clf, "booster_", None) if clf is not None else None
-    if prep is None or booster is None:
-        return pd.DataFrame()
-
-    transformed = prep.transform(input_df)
-    names = prep.get_feature_names_out()
-    contributions = booster.predict(transformed, pred_contrib=True)
-    if contributions.ndim != 2 or contributions.shape[1] != len(names) + 1:
-        return pd.DataFrame()
-
-    frame = pd.DataFrame(
-        {
-            "transformed_feature": names,
-            "contribution": contributions[0][:-1],
-        }
-    )
-    frame["feature"] = frame["transformed_feature"].map(original_feature_name)
-    grouped = frame.groupby("feature", as_index=False)["contribution"].sum()
-    grouped["feature_label"] = grouped["feature"].map(FEATURE_LABELS).fillna(grouped["feature"])
-    grouped["abs_contribution"] = grouped["contribution"].abs()
-    grouped["direction"] = np.where(grouped["contribution"] >= 0, "위험 판단 증가", "위험 판단 감소")
-    return grouped.sort_values("abs_contribution", ascending=False)
+def load_prediction_metadata() -> dict:
+    return get_prediction_metadata(PROJECT_ROOT)
 
 
 def peer_position(value: float, q1: float, q3: float) -> str:
@@ -134,9 +57,10 @@ def fmt_number(value) -> str:
 
 def action_guides(features: list[str]) -> list[str]:
     guides: list[str] = []
+
     if any(
-        f in features
-        for f in [
+        feature in features
+        for feature in [
             "days_until_contract_end",
             "days_until_renewal",
             "contract_end_within_3m",
@@ -144,145 +68,302 @@ def action_guides(features: list[str]) -> list[str]:
             "contract_tenure_days",
         ]
     ):
-        guides.append("계약 종료·갱신 일정과 현재 계약 상태를 먼저 확인")
+        guides.append(
+            "계약 종료·갱신 일정과 현재 계약 상태를 먼저 확인"
+        )
+
     if any(
-        f in features
-        for f in [
+        feature in features
+        for feature in [
             "recent_consumption_change_log",
             "cons_12m",
             "cons_last_month",
             "forecast_cons_12m",
         ]
     ):
-        guides.append("최근 소비량 변화와 예상 사용 패턴을 확인")
-    if any("price" in f or "forecast_off_peak" in f for f in features):
-        guides.append("최근·예상 가격 조건 변화가 있는지 확인")
-    if any(f in features for f in ["net_margin", "margin_net_pow_ele", "pow_max"]):
-        guides.append("고객 규모와 수익성 정보를 함께 확인해 관리 우선순위를 판단")
+        guides.append(
+            "최근 소비량 변화와 예상 사용 패턴을 확인"
+        )
+
+    if any(
+        "price" in feature
+        or "forecast_off_peak" in feature
+        for feature in features
+    ):
+        guides.append(
+            "최근·예상 가격 조건 변화가 있는지 확인"
+        )
+
+    if any(
+        feature in features
+        for feature in [
+            "net_margin",
+            "margin_net_pow_ele",
+            "pow_max",
+        ]
+    ):
+        guides.append(
+            "고객 규모와 수익성 정보를 함께 확인해 관리 우선순위를 판단"
+        )
+
     return guides[:3]
 
 
 st.title("🎯 고객 위험 분석")
 st.caption(
-    "특정 고객의 예측 위험도, 전체 고객 중 위험 순위, 모델이 위험 판단에 많이 반영한 항목을 확인합니다."
+    "특정 고객의 예측 위험도, 전체 고객 중 위험 순위, "
+    "모델이 위험 판단에 많이 반영한 항목을 확인합니다."
 )
 
 try:
-    champion = load_csv(MODEL_DIR / "champion_summary.csv").iloc[0]
-    predictions = load_csv(PROJECT_ROOT / "artifacts" / "champion_test_predictions.csv")
-    test = load_csv(PROJECT_ROOT / "data" / "processed" / "test.csv")
-    peer_ref = load_csv(EDA_DIR / "peer_reference.csv")
-    champion_name = str(champion["champion"])
-    model = load_model(champion_name)
+    test = load_csv(
+        PROJECT_ROOT
+        / "data"
+        / "processed"
+        / "test.csv"
+    )
+    peer_ref = load_csv(
+        EDA_DIR
+        / "peer_reference.csv"
+    )
+    metadata = load_prediction_metadata()
 except Exception as exc:
-    st.error("고객 위험 분석에 필요한 파일을 불러오지 못했습니다.")
+    st.error(
+        "고객 위험 분석에 필요한 파일을 불러오지 못했습니다."
+    )
     st.exception(exc)
     st.stop()
 
-customer_ids = test["id"].astype(str).tolist()
-selected_id = st.selectbox("고객 ID 선택", customer_ids)
-customer = test.loc[test["id"].astype(str) == selected_id].iloc[0]
-feature_cols = [c for c in test.columns if c not in {"id", "churn"}]
-input_df = pd.DataFrame([customer[feature_cols]])
+customer_ids = (
+    test["id"]
+    .astype(str)
+    .tolist()
+)
+selected_id = st.selectbox(
+    "고객 ID 선택",
+    customer_ids,
+)
 
-risk_score = float(model.predict_proba(input_df)[0, 1])
-score_distribution = predictions["predicted_probability"].astype(float)
-percentile = float((score_distribution <= risk_score).mean())
-top_percent = max(0.1, (1 - percentile) * 100)
-threshold = float(champion["oof_threshold"])
-top10_cutoff = float(score_distribution.quantile(0.90))
+customer = test.loc[
+    test["id"].astype(str) == selected_id
+].iloc[0]
 
-if risk_score >= top10_cutoff:
-    risk_group = "최우선 관리"
-    group_icon = "🔴"
-elif risk_score >= threshold:
-    risk_group = "주의 관찰"
-    group_icon = "🟠"
-else:
-    risk_group = "일반 관리"
-    group_icon = "🟢"
+feature_cols = list(
+    metadata["feature_names"]
+)
+missing_features = [
+    feature
+    for feature in feature_cols
+    if feature not in customer.index
+]
+if missing_features:
+    st.error(
+        "현재 Test 데이터에 학습 Feature가 일부 없습니다."
+    )
+    st.code(
+        "\n".join(missing_features)
+    )
+    st.stop()
+
+input_df = pd.DataFrame(
+    [customer[feature_cols]]
+)
+
+try:
+    prediction = predict_customer(
+        input_df=input_df,
+        project_root=PROJECT_ROOT,
+    )
+    contrib = explain_customer(
+        input_df=input_df,
+        project_root=PROJECT_ROOT,
+    )
+except Exception as exc:
+    st.error(
+        "저장된 Champion Bundle로 예측하는 중 오류가 발생했습니다."
+    )
+    st.exception(exc)
+    st.stop()
+
+risk_score = float(
+    prediction["risk_score"]
+)
+top_percent = float(
+    prediction["top_percent"]
+)
+risk_group = str(
+    prediction["risk_group"]
+)
+group_icon = str(
+    prediction["risk_icon"]
+)
 
 c1, c2, c3 = st.columns(3)
-c1.metric("예측 위험도 점수", f"{risk_score:.3f} / 1.000")
-c2.metric("전체 고객 중 위험 순위", f"상위 {top_percent:.1f}%")
-c3.metric("관리 우선순위", f"{group_icon} {risk_group}")
+c1.metric(
+    "예측 위험도 점수",
+    f"{risk_score:.3f} / 1.000",
+)
+c2.metric(
+    "전체 고객 중 위험 순위",
+    f"상위 {top_percent:.1f}%",
+)
+c3.metric(
+    "관리 우선순위",
+    f"{group_icon} {risk_group}",
+)
+
 st.caption(
     "위험도 점수는 고객 간 우선순위를 정하기 위한 모델 점수입니다. "
     "별도의 확률 보정 검증 없이 '실제 이탈 확률'로 단정하지 않습니다."
 )
 
 st.markdown("---")
-st.subheader("1. 모델이 이 고객을 위험하다고 본 주요 요인")
-contrib = local_contributions(model, input_df)
+st.subheader(
+    "1. 모델이 이 고객을 위험하다고 본 주요 요인"
+)
+
 if contrib.empty:
-    st.info("현재 저장 모델에서 개별 기여도를 계산할 수 없습니다.")
+    st.info(
+        "현재 저장 모델에서 개별 기여도를 계산할 수 없습니다."
+    )
 else:
-    top_contrib = contrib.head(8).sort_values("contribution")
+    top_contrib = (
+        contrib.head(8)
+        .sort_values("contribution")
+    )
+
     fig = px.bar(
         top_contrib,
         x="contribution",
         y="feature_label",
         orientation="h",
         color="direction",
-        color_discrete_map={"위험 판단 증가": RED, "위험 판단 감소": GREEN},
-        labels={"contribution": "모델 기여도", "feature_label": "", "direction": ""},
+        color_discrete_map={
+            "위험 판단 증가": RED,
+            "위험 판단 감소": GREEN,
+        },
+        labels={
+            "contribution": "모델 기여도",
+            "feature_label": "",
+            "direction": "",
+        },
     )
     fig.update_layout(
         height=440,
-        margin=dict(l=20, r=20, t=20, b=20),
+        margin=dict(
+            l=20,
+            r=20,
+            t=20,
+            b=20,
+        ),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         legend_title_text="",
     )
-    fig.update_yaxes(gridcolor="#edf1f5")
-    st.plotly_chart(fig, use_container_width=True)
+    fig.update_yaxes(
+        gridcolor="#edf1f5"
+    )
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+    )
     st.caption(
         "양수는 이 고객의 위험 판단을 높인 방향, 음수는 낮춘 방향입니다. "
-        "LightGBM의 개별 예측 기여도를 원래 Feature 단위로 합산한 값이며 인과관계를 의미하지 않습니다."
+        "LightGBM의 개별 예측 기여도를 원래 Feature 단위로 합산한 값이며 "
+        "인과관계를 의미하지 않습니다."
     )
 
 st.markdown("---")
-st.subheader("2. 이 고객은 일반 고객과 무엇이 다른가?")
+st.subheader(
+    "2. 이 고객은 일반 고객과 무엇이 다른가?"
+)
+
 rows = []
 for _, ref in peer_ref.iterrows():
     feature = ref["feature"]
+
     if feature not in customer.index:
         continue
-    value = pd.to_numeric(pd.Series([customer[feature]]), errors="coerce").iloc[0]
+
+    value = pd.to_numeric(
+        pd.Series(
+            [customer[feature]]
+        ),
+        errors="coerce",
+    ).iloc[0]
+
     rows.append(
         {
             "항목": ref["feature_label"],
-            "선택 고객": fmt_number(value),
-            "Train 중앙값": fmt_number(ref["median"]),
-            "비교": peer_position(value, float(ref["q1"]), float(ref["q3"])),
+            "선택 고객": fmt_number(
+                value
+            ),
+            "Train 중앙값": fmt_number(
+                ref["median"]
+            ),
+            "비교": peer_position(
+                value,
+                float(ref["q1"]),
+                float(ref["q3"]),
+            ),
         }
     )
+
 peer_table = pd.DataFrame(rows)
-st.dataframe(peer_table, hide_index=True, use_container_width=True)
+st.dataframe(
+    peer_table,
+    hide_index=True,
+    use_container_width=True,
+)
 st.caption(
-    "'낮은 편/높은 편'은 Train 고객의 하위 25%·상위 25% 기준입니다. 단위가 다른 변수를 억지로 한 그래프에 합치지 않고 항목별 위치만 비교합니다."
+    "'낮은 편/높은 편'은 Train 고객의 하위 25%·상위 25% 기준입니다. "
+    "단위가 다른 변수를 억지로 한 그래프에 합치지 않고 항목별 위치만 비교합니다."
 )
 
 st.markdown("---")
 st.subheader("3. 먼저 확인할 항목")
+
 positive_features = (
-    contrib.loc[contrib["contribution"] > 0, "feature"].head(8).tolist()
+    contrib.loc[
+        contrib["contribution"] > 0,
+        "feature",
+    ]
+    .head(8)
+    .tolist()
     if not contrib.empty
     else []
 )
-guides = action_guides(positive_features)
-if guides:
-    for idx, guide in enumerate(guides, 1):
-        st.write(f"**{idx}. {guide}**")
-else:
-    st.write("현재 모델 기여도만으로 특정 점검 항목을 우선 제시하기 어렵습니다.")
-st.info(
-    "이 화면은 고객에게 어떤 혜택을 반드시 제공하라고 결정하는 화면이 아닙니다. "
-    "위험도가 높은 고객을 먼저 찾고, 실제 상담·계약 정보를 확인할 우선순위를 정하는 용도입니다."
+
+guides = action_guides(
+    positive_features
 )
 
-with st.expander("평가용 실제 결과 확인"):
-    st.write(f"실제 churn: {int(customer['churn'])}")
+if guides:
+    for idx, guide in enumerate(
+        guides,
+        1,
+    ):
+        st.write(
+            f"**{idx}. {guide}**"
+        )
+else:
+    st.write(
+        "현재 모델 기여도만으로 특정 점검 항목을 우선 제시하기 어렵습니다."
+    )
+
+st.info(
+    "이 화면은 고객에게 어떤 혜택을 반드시 제공하라고 결정하는 화면이 아닙니다. "
+    "위험도가 높은 고객을 먼저 찾고, 실제 상담·계약 정보를 확인할 우선순위를 "
+    "정하는 용도입니다."
+)
+
+with st.expander(
+    "평가용 실제 결과 확인"
+):
+    st.write(
+        f"실제 churn: {int(customer['churn'])}"
+    )
     st.caption(
-        "이 값은 프로젝트 평가용 Test 데이터의 정답입니다. 실제 운영 환경에서는 예측 시점에 알 수 없는 값입니다."
+        "이 값은 프로젝트 평가용 Test 데이터의 정답입니다. "
+        "실제 운영 환경에서는 예측 시점에 알 수 없는 값입니다."
     )
