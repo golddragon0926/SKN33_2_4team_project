@@ -54,6 +54,51 @@ EDA_ARTIFACT_DIR = Path("artifacts") / "eda"
 REPORT_IMAGE_DIR = Path("docs") / "images" / "preprocessing_report"
 
 
+def _configure_korean_font() -> str | None:
+    """OS에 설치된 한글 폰트를 찾아 Matplotlib 전역 폰트로 설정한다."""
+    import matplotlib.font_manager as fm
+
+    # Windows에서 가장 안정적인 경로 우선 사용
+    direct_paths = [
+        Path("C:/Windows/Fonts/malgun.ttf"),
+        Path("C:/Windows/Fonts/malgunbd.ttf"),
+    ]
+    for font_path in direct_paths:
+        if font_path.exists():
+            fm.fontManager.addfont(str(font_path))
+            font_name = fm.FontProperties(fname=str(font_path)).get_name()
+            plt.rcParams["font.family"] = font_name
+            plt.rcParams["axes.unicode_minus"] = False
+            return font_name
+
+    # macOS / Linux / 기타 Windows 환경 fallback
+    candidates = [
+        "Malgun Gothic",
+        "AppleGothic",
+        "NanumGothic",
+        "Noto Sans CJK KR",
+        "Noto Sans KR",
+    ]
+    installed = {font.name for font in fm.fontManager.ttflist}
+    for font_name in candidates:
+        if font_name in installed:
+            plt.rcParams["font.family"] = font_name
+            plt.rcParams["axes.unicode_minus"] = False
+            return font_name
+
+    plt.rcParams["axes.unicode_minus"] = False
+    print(
+        "[경고] Matplotlib에서 사용 가능한 한글 폰트를 찾지 못했습니다. "
+        "Windows에서는 맑은 고딕, macOS에서는 AppleGothic, "
+        "Linux에서는 NanumGothic/Noto Sans KR 설치 여부를 확인하세요."
+    )
+    return None
+
+
+KOREAN_FONT_NAME = _configure_korean_font()
+
+
+
 def _save_eda_artifact(df: pd.DataFrame, path: Path) -> None:
     """EDA 결과를 artifacts/eda 아래 CSV로 저장한다."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -75,6 +120,9 @@ def _export_base_eda_artifacts(
 
     client = raw["client"].copy()
     price = raw["price"].copy()
+
+    raw_missing_total = int(client.isna().sum().sum() + price.isna().sum().sum())
+    print(f"원본 직접 결측치 총합: {raw_missing_total:,}개")
 
     overview = pd.DataFrame(
         {
@@ -171,6 +219,10 @@ def _export_base_eda_artifacts(
 def _save_figure(fig: plt.Figure, path: Path) -> None:
     """보고서용 그래프를 저장하고 Figure를 닫는다."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    for ax in fig.axes:
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.grid(axis="y", alpha=0.18)
     fig.tight_layout()
     fig.savefig(path, dpi=160, bbox_inches="tight")
     plt.close(fig)
@@ -202,62 +254,24 @@ def _save_base_report_figures(
         .reindex([0, 1], fill_value=0)
     )
     fig, ax = plt.subplots(figsize=(7, 4.5))
-    bars = ax.bar(["Retained (0)", "Churn (1)"], churn_counts.values)
-    ax.set_title("Target Distribution")
-    ax.set_ylabel("Customers")
+    bars = ax.bar(["유지 (0)", "이탈 (1)"], churn_counts.values)
+    ax.set_title("고객 이탈 분포")
+    ax.set_ylabel("고객 수")
     total = churn_counts.sum()
     for bar, count in zip(bars, churn_counts.values):
         rate = count / total if total else 0
         ax.text(
             bar.get_x() + bar.get_width() / 2,
             bar.get_height(),
-            f"{int(count):,}\n({rate:.1%})",
+            f"{int(count):,} ({rate:.1%})",
             ha="center",
             va="bottom",
+            fontsize=9,
         )
     _save_figure(fig, image_dir / "01_churn_distribution.png")
 
-    # 2. 원본 결측률 상위 컬럼
-    missing_rows: list[dict[str, Any]] = []
-    for source_name, frame in [("client", client), ("price", price)]:
-        missing = frame.isna().sum()
-        for feature, count in missing.items():
-            if count > 0:
-                missing_rows.append(
-                    {
-                        "label": f"{source_name}.{feature}",
-                        "missing_rate": count / len(frame),
-                    }
-                )
 
-    missing_df = pd.DataFrame(missing_rows)
-    fig, ax = plt.subplots(figsize=(9, 5))
-    if missing_df.empty:
-        ax.text(
-            0.5,
-            0.5,
-            "No missing values detected in raw data",
-            ha="center",
-            va="center",
-            transform=ax.transAxes,
-        )
-        ax.set_axis_off()
-    else:
-        top_missing = (
-            missing_df
-            .sort_values("missing_rate", ascending=False)
-            .head(15)
-            .sort_values("missing_rate")
-        )
-        ax.barh(
-            top_missing["label"],
-            top_missing["missing_rate"] * 100,
-        )
-        ax.set_title("Raw Missing Rate - Top Columns")
-        ax.set_xlabel("Missing rate (%)")
-    _save_figure(fig, image_dir / "02_raw_missing_rate.png")
-
-    # 3. Train/Test 타깃 비율 비교
+    # 2. Train/Test 타깃 비율 비교
     split_rates = pd.Series(
         {
             "Train": float(train_client[TARGET_COL].mean()),
@@ -266,8 +280,8 @@ def _save_base_report_figures(
     )
     fig, ax = plt.subplots(figsize=(7, 4.5))
     bars = ax.bar(split_rates.index, split_rates.values * 100)
-    ax.set_title("Churn Rate after Stratified Split")
-    ax.set_ylabel("Churn rate (%)")
+    ax.set_title("Train/Test 이탈률")
+    ax.set_ylabel("이탈률(%)")
     for bar, value in zip(bars, split_rates.values):
         ax.text(
             bar.get_x() + bar.get_width() / 2,
@@ -278,7 +292,7 @@ def _save_base_report_figures(
         )
     _save_figure(fig, image_dir / "03_train_test_churn_rate.png")
 
-    # 4. 월별 대표 가격 중앙값 추이
+    # 3. 월별 대표 가격 중앙값 추이
     price_plot = price.copy()
     price_plot["price_date"] = pd.to_datetime(
         price_plot["price_date"],
@@ -309,24 +323,24 @@ def _save_base_report_figures(
             monthly.index,
             monthly["price_off_peak_var"],
             marker="o",
-            label="Off-peak energy price",
+            label="비첨두 에너지 가격",
         )
-        ax.set_title("Monthly Median Off-peak Energy Price")
-        ax.set_xlabel("Price month")
-        ax.set_ylabel("Median variable price")
-        ax.tick_params(axis="x", rotation=45)
+        ax.set_title("비첨두 에너지 가격 추이")
+        ax.set_xlabel("")
+        ax.set_ylabel("가격")
+        ax.tick_params(axis="x", rotation=0)
     _save_figure(fig, image_dir / "04_monthly_price_median_trend.png")
 
-    # 5. A0 생성 후 Feature 구성
+    # 4. A0 생성 후 Feature 구성
     a0_numeric = len(built["numeric_features"])
     a0_categorical = len(built["categorical_features"])
     fig, ax = plt.subplots(figsize=(7, 4.5))
     bars = ax.bar(
-        ["Numeric", "Categorical"],
+        ["수치형", "범주형"],
         [a0_numeric, a0_categorical],
     )
-    ax.set_title("A0 Feature Composition")
-    ax.set_ylabel("Feature count")
+    ax.set_title("A0 Feature 구성")
+    ax.set_ylabel("개수")
     for bar, value in zip(
         bars,
         [a0_numeric, a0_categorical],

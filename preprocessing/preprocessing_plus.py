@@ -37,6 +37,51 @@ PLUS_FEATURE_COLS = [
 EDA_ARTIFACT_DIR = Path("artifacts") / "eda"
 REPORT_IMAGE_DIR = Path("docs") / "images" / "preprocessing_report"
 
+
+def _configure_korean_font() -> str | None:
+    """OS에 설치된 한글 폰트를 찾아 Matplotlib 전역 폰트로 설정한다."""
+    import matplotlib.font_manager as fm
+
+    # Windows에서 가장 안정적인 경로 우선 사용
+    direct_paths = [
+        Path("C:/Windows/Fonts/malgun.ttf"),
+        Path("C:/Windows/Fonts/malgunbd.ttf"),
+    ]
+    for font_path in direct_paths:
+        if font_path.exists():
+            fm.fontManager.addfont(str(font_path))
+            font_name = fm.FontProperties(fname=str(font_path)).get_name()
+            plt.rcParams["font.family"] = font_name
+            plt.rcParams["axes.unicode_minus"] = False
+            return font_name
+
+    # macOS / Linux / 기타 Windows 환경 fallback
+    candidates = [
+        "Malgun Gothic",
+        "AppleGothic",
+        "NanumGothic",
+        "Noto Sans CJK KR",
+        "Noto Sans KR",
+    ]
+    installed = {font.name for font in fm.fontManager.ttflist}
+    for font_name in candidates:
+        if font_name in installed:
+            plt.rcParams["font.family"] = font_name
+            plt.rcParams["axes.unicode_minus"] = False
+            return font_name
+
+    plt.rcParams["axes.unicode_minus"] = False
+    print(
+        "[경고] Matplotlib에서 사용 가능한 한글 폰트를 찾지 못했습니다. "
+        "Windows에서는 맑은 고딕, macOS에서는 AppleGothic, "
+        "Linux에서는 NanumGothic/Noto Sans KR 설치 여부를 확인하세요."
+    )
+    return None
+
+
+KOREAN_FONT_NAME = _configure_korean_font()
+
+
 FEATURE_META: dict[str, tuple[str, str, str]] = {
     "has_gas": (
         "가스 상품 보유 여부",
@@ -532,6 +577,10 @@ def _export_a3_eda_artifacts(
 def _save_figure(fig: plt.Figure, path: Path) -> None:
     """보고서용 그래프를 저장하고 Figure를 닫는다."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    for ax in fig.axes:
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.grid(axis="y", alpha=0.18)
     fig.tight_layout()
     fig.savefig(path, dpi=160, bbox_inches="tight")
     plt.close(fig)
@@ -566,8 +615,8 @@ def _plot_profile_churn_rate(
         values = data["churn_rate"].astype(float) * 100
         bars = ax.bar(labels, values)
         ax.set_title(title)
-        ax.set_ylabel("Churn rate (%)")
-        ax.tick_params(axis="x", rotation=20)
+        ax.set_ylabel("이탈률(%)")
+        ax.tick_params(axis="x", rotation=0)
         for bar, value, count in zip(
             bars,
             values,
@@ -576,10 +625,10 @@ def _plot_profile_churn_rate(
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
                 bar.get_height(),
-                f"{value:.1f}%\\n(n={int(count):,})",
+                f"{value:.1f}%",
                 ha="center",
                 va="bottom",
-                fontsize=8,
+                fontsize=9,
             )
 
     _save_figure(fig, path)
@@ -598,19 +647,19 @@ def _save_a3_report_figures(
     _plot_profile_churn_rate(
         profiles=profiles,
         feature="contract_tenure_days",
-        title="Churn Rate by Contract Tenure",
+        title="계약 유지기간별 이탈률",
         path=image_dir / "06_contract_tenure_churn_rate.png",
     )
     _plot_profile_churn_rate(
         profiles=profiles,
         feature="days_until_contract_end",
-        title="Churn Rate by Days Until Contract End",
+        title="계약 종료시점별 이탈률",
         path=image_dir / "07_contract_end_churn_rate.png",
     )
     _plot_profile_churn_rate(
         profiles=profiles,
         feature="recent_consumption_change_log",
-        title="Churn Rate by Recent Consumption Change",
+        title="최근 소비변화별 이탈률",
         path=image_dir / "08_consumption_change_churn_rate.png",
     )
 
@@ -634,8 +683,8 @@ def _save_a3_report_figures(
         ["A0", "A3"],
         [a0_count, a3_count],
     )
-    ax.set_title("Feature Count: A0 to A3")
-    ax.set_ylabel("Model feature count")
+    ax.set_title("Feature 수 변화")
+    ax.set_ylabel("개수")
     for bar, value in zip(
         bars,
         [a0_count, a3_count],
