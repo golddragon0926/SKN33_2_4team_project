@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 try:
     from data_preprocessing import binary_with_missing, safe_ratio
@@ -34,6 +35,7 @@ PLUS_FEATURE_COLS = [
 
 
 EDA_ARTIFACT_DIR = Path("artifacts") / "eda"
+REPORT_IMAGE_DIR = Path("docs") / "images" / "preprocessing_report"
 
 FEATURE_META: dict[str, tuple[str, str, str]] = {
     "has_gas": (
@@ -513,9 +515,141 @@ def _export_a3_eda_artifacts(
         }
     )
     _save_eda_artifact(feature_list, out_dir / "a3_feature_list.csv")
+
+    report_image_dir = _save_a3_report_figures(
+        project_root=project_root,
+        baseline_train=baseline_train,
+        train_plus=train_plus,
+        profiles=profiles,
+    )
+    print(f"A3 전처리 보고서 이미지 저장 완료: {report_image_dir}")
+
     return out_dir
 
 
+
+
+def _save_figure(fig: plt.Figure, path: Path) -> None:
+    """보고서용 그래프를 저장하고 Figure를 닫는다."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout()
+    fig.savefig(path, dpi=160, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _plot_profile_churn_rate(
+    profiles: pd.DataFrame,
+    feature: str,
+    title: str,
+    path: Path,
+) -> None:
+    """미리 계산된 Feature profile을 이용해 구간별 이탈률 그래프를 저장한다."""
+    data = (
+        profiles.loc[profiles["feature"] == feature]
+        .sort_values("bucket_order")
+        .copy()
+    )
+
+    fig, ax = plt.subplots(figsize=(8, 4.8))
+    if data.empty:
+        ax.text(
+            0.5,
+            0.5,
+            f"No profile data: {feature}",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+        )
+        ax.set_axis_off()
+    else:
+        labels = data["bucket"].astype(str)
+        values = data["churn_rate"].astype(float) * 100
+        bars = ax.bar(labels, values)
+        ax.set_title(title)
+        ax.set_ylabel("Churn rate (%)")
+        ax.tick_params(axis="x", rotation=20)
+        for bar, value, count in zip(
+            bars,
+            values,
+            data["customer_count"],
+        ):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height(),
+                f"{value:.1f}%\\n(n={int(count):,})",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+            )
+
+    _save_figure(fig, path)
+
+
+def _save_a3_report_figures(
+    project_root: Path,
+    baseline_train: pd.DataFrame,
+    train_plus: pd.DataFrame,
+    profiles: pd.DataFrame,
+) -> Path:
+    """A3 Feature Engineering 판단 근거를 보여주는 보고서용 그래프를 저장한다."""
+    image_dir = project_root / REPORT_IMAGE_DIR
+    image_dir.mkdir(parents=True, exist_ok=True)
+
+    _plot_profile_churn_rate(
+        profiles=profiles,
+        feature="contract_tenure_days",
+        title="Churn Rate by Contract Tenure",
+        path=image_dir / "06_contract_tenure_churn_rate.png",
+    )
+    _plot_profile_churn_rate(
+        profiles=profiles,
+        feature="days_until_contract_end",
+        title="Churn Rate by Days Until Contract End",
+        path=image_dir / "07_contract_end_churn_rate.png",
+    )
+    _plot_profile_churn_rate(
+        profiles=profiles,
+        feature="recent_consumption_change_log",
+        title="Churn Rate by Recent Consumption Change",
+        path=image_dir / "08_consumption_change_churn_rate.png",
+    )
+
+    # A0 -> A3 Feature 수 변화
+    a0_count = len(
+        [
+            col
+            for col in baseline_train.columns
+            if col not in {ID_COL, TARGET_COL}
+        ]
+    )
+    a3_count = len(
+        [
+            col
+            for col in train_plus.columns
+            if col not in {ID_COL, TARGET_COL}
+        ]
+    )
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    bars = ax.bar(
+        ["A0", "A3"],
+        [a0_count, a3_count],
+    )
+    ax.set_title("Feature Count: A0 to A3")
+    ax.set_ylabel("Model feature count")
+    for bar, value in zip(
+        bars,
+        [a0_count, a3_count],
+    ):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            str(value),
+            ha="center",
+            va="bottom",
+        )
+    _save_figure(fig, image_dir / "09_a0_a3_feature_count.png")
+
+    return image_dir
 
 def find_project_root(start: str | Path | None = None) -> Path:
     """A0 기준선과 고객 분할본이 있는 프로젝트 루트를 찾는다."""
