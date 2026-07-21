@@ -1,40 +1,25 @@
-from pathlib import Path
-
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+# 💡 common 패키지 통합 import (상대 경로 대신 common 모듈 사용)
+from common import (
+    get_model_path,
+    load_csv,
+    inject_common_css,
+    style_chart,
+    NAVY,
+    ORANGE,
+    GRAY,
+)
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-MODEL_DIR = PROJECT_ROOT / "artifacts"
-NAVY = "#17324d"
-ORANGE = "#f59e0b"
-GRAY = "#9aa6b2"
+# 공통 CSS 주입
+inject_common_css()
 
-
-@st.cache_data
-def load_csv(path: Path) -> pd.DataFrame:
-    if not path.exists():
-        raise FileNotFoundError(
-            f"필수 파일이 없습니다: {path}\npython modeling/evaluate.py 를 먼저 실행하세요."
-        )
-    return pd.read_csv(path)
-
-
-def style_chart(fig, height: int = 400):
-    fig.update_layout(
-        height=height,
-        margin=dict(l=20, r=20, t=45, b=20),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(size=13),
-        legend_title_text="",
-    )
-    fig.update_xaxes(showgrid=False)
-    fig.update_yaxes(gridcolor="#edf1f5")
-    return fig
-
+# ==========================================
+# 메인 페이지 시작
+# ==========================================
 
 st.title("🤖 모델 비교와 유지관리 전략")
 st.caption(
@@ -42,8 +27,9 @@ st.caption(
     "얼마나 많은 이탈 고객을 포착할 수 있는지까지 연결합니다."
 )
 
+# 1. 모델 데이터 파일 안전 로드 (get_model_path 활용)
 try:
-    metrics = load_csv(MODEL_DIR / "model_algorithm_comparison.csv")
+    metrics = load_csv(get_model_path("model_algorithm_comparison.csv"))
     display_names = {
         "dummy": "Dummy",
         "logistic_regression": "Logistic Regression",
@@ -52,15 +38,17 @@ try:
         "lightgbm": "LightGBM",
     }
     metrics["display_name"] = metrics["model"].map(display_names).fillna(metrics["model"])
-    champion = load_csv(MODEL_DIR / "champion_summary.csv").iloc[0]
-    pr_curve = load_csv(MODEL_DIR / "pr_curve.csv")
-    campaign = load_csv(MODEL_DIR / "campaign_capacity.csv")
-    fe_compare = load_csv(MODEL_DIR / "feature_engineering_comparison.csv")
+
+    champion = load_csv(get_model_path("champion_summary.csv")).iloc[0]
+    pr_curve = load_csv(get_model_path("pr_curve.csv"))
+    campaign = load_csv(get_model_path("campaign_capacity.csv"))
+    fe_compare = load_csv(get_model_path("feature_engineering_comparison.csv"))
 except Exception as exc:
-    st.error("모델 결과를 불러오지 못했습니다.")
+    st.error("🚨 모델 시각화 결과를 불러오지 못했습니다.")
     st.exception(exc)
     st.stop()
 
+# 2. 상단 KPI 메트릭 작성
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("최종 모델", str(champion["display_name"]))
 c2.metric("OOF PR-AUC", f"{float(champion['oof_pr_auc']):.3f}")
@@ -68,9 +56,15 @@ c3.metric("Test PR-AUC", f"{float(champion['test_pr_auc']):.3f}")
 c4.metric("Top 10% Lift", f"{float(champion['test_top10_lift']):.2f}배")
 
 st.markdown("---")
+
+# ------------------------------------------
+# Section 1: 후보 모델 비교 및 선택
+# ------------------------------------------
 st.subheader("1. 어떤 모델을 선택했나?")
+
 plot_metrics = metrics.sort_values("oof_pr_auc").copy()
 colors = [ORANGE if m == str(champion["champion"]) else GRAY for m in plot_metrics["model"]]
+
 fig = px.bar(
     plot_metrics,
     x="oof_pr_auc",
@@ -91,7 +85,19 @@ show_cols = [
 ]
 summary_table = metrics[show_cols].copy()
 summary_table.columns = ["모델", "PR-AUC", "F1", "Recall", "Top10 Lift"]
-st.dataframe(summary_table, hide_index=True, use_container_width=True)
+
+st.dataframe(
+    summary_table,
+    column_config={
+        "PR-AUC": st.column_config.NumberColumn("PR-AUC", format="%.3f"),
+        "F1": st.column_config.NumberColumn("F1", format="%.3f"),
+        "Recall": st.column_config.NumberColumn("Recall", format="%.3f"),
+        "Top10 Lift": st.column_config.NumberColumn("Top10 Lift", format="%.2f배"),
+    },
+    hide_index=True,
+    use_container_width=True,
+)
+
 st.markdown(
     f"""
     <div class="insight-box">
@@ -103,7 +109,12 @@ st.markdown(
 )
 
 st.markdown("---")
+
+# ------------------------------------------
+# Section 2: Precision-Recall Curve
+# ------------------------------------------
 st.subheader("2. 불균형 데이터에서 순위화 성능은 어떤가?")
+
 fig = go.Figure()
 for model_name in pr_curve["model"].drop_duplicates():
     model_df = pr_curve.loc[pr_curve["model"] == model_name]
@@ -111,6 +122,7 @@ for model_name in pr_curve["model"].drop_duplicates():
     name = display.iloc[0] if not display.empty else model_name
     width = 3.5 if model_name == str(champion["champion"]) else 1.8
     color = ORANGE if model_name == str(champion["champion"]) else None
+
     fig.add_trace(
         go.Scatter(
             x=model_df["recall"],
@@ -130,6 +142,7 @@ if not dummy_row.empty:
         line_color=GRAY,
         annotation_text=f"무작위 기준 ≈ {baseline:.3f}",
     )
+
 fig.update_layout(xaxis_title="Recall", yaxis_title="Precision")
 st.plotly_chart(style_chart(fig, 430), use_container_width=True)
 st.caption(
@@ -137,6 +150,10 @@ st.caption(
 )
 
 st.markdown("---")
+
+# ------------------------------------------
+# Section 3: 용량 기반 타겟 마케팅 시뮬레이션
+# ------------------------------------------
 st.subheader("3. 실제로 몇 %의 고객을 우선 관리할까?")
 st.write(
     "영업·유지관리팀이 관리할 수 있는 고객 비율을 선택하면, 해당 인원 안에 실제 이탈 고객이 얼마나 포함되는지 확인할 수 있습니다."
@@ -201,6 +218,10 @@ fig.update_layout(
 st.plotly_chart(style_chart(fig, 430), use_container_width=True)
 
 st.markdown("---")
+
+# ------------------------------------------
+# Section 4: 최종 Test 데이터 일반화 성능
+# ------------------------------------------
 st.subheader("4. 최종 Test에서는 어느 정도 성능이 나왔나?")
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("PR-AUC", f"{float(champion['test_pr_auc']):.3f}")
@@ -212,9 +233,15 @@ st.caption(
 )
 
 st.markdown("---")
+
+# ------------------------------------------
+# Section 5: Feature Engineering 효과 검증
+# ------------------------------------------
 st.subheader("5. Feature Engineering은 실제로 도움이 됐나?")
+
 pr_row = fe_compare.loc[fe_compare["metric"] == "OOF PR-AUC"].iloc[0]
 lift_row = fe_compare.loc[fe_compare["metric"] == "Top10 Lift"].iloc[0]
+
 c1, c2 = st.columns(2)
 with c1:
     st.metric(
@@ -223,6 +250,7 @@ with c1:
         delta=f"+{float(pr_row['relative_improvement_pct']):.1f}% vs A0",
     )
     st.caption(f"A0 {float(pr_row['A0']):.3f} → A3 {float(pr_row['A3']):.3f}")
+
 with c2:
     st.metric(
         "Top10 Lift",
@@ -230,15 +258,20 @@ with c2:
         delta=f"+{float(lift_row['relative_improvement_pct']):.1f}% vs A0",
     )
     st.caption(f"A0 {float(lift_row['A0']):.2f}배 → A3 {float(lift_row['A3']):.2f}배")
+
 st.write(
     "A0에서 충분히 활용하지 못했던 **계약 유지 기간·종료·갱신 시점**을 12개 Feature로 추가한 A3가 더 좋은 결과를 보여 최종 37개 Feature를 사용했습니다."
 )
 
-importance_path = MODEL_DIR / "lightgbm_feature_importance.csv"
-if importance_path.exists():
+# ------------------------------------------
+# Section 6: Feature Importance
+# ------------------------------------------
+importance_file = get_model_path("lightgbm_feature_importance.csv")
+if importance_file.exists():
     st.markdown("---")
     st.subheader("6. 최종 모델은 어떤 정보를 많이 활용했나?")
-    importance = load_csv(importance_path).head(10).sort_values("importance_pct")
+
+    importance = load_csv(importance_file).head(10).sort_values("importance_pct")
     fig = px.bar(
         importance,
         x="importance_pct",
@@ -257,11 +290,14 @@ if importance_path.exists():
         "중요도가 높다는 것은 모델이 예측 과정에서 자주 활용했다는 뜻입니다. 해당 변수가 이탈의 직접 원인이라는 의미는 아닙니다."
     )
 
+# ------------------------------------------
+# Expander: 기술 평가 세부 지표
+# ------------------------------------------
 with st.expander("기술 평가 상세 보기: Threshold · ROC · Confusion Matrix"):
     try:
-        threshold_curve = load_csv(MODEL_DIR / "threshold_curve.csv")
-        roc_curve = load_csv(MODEL_DIR / "roc_curve.csv")
-        confusion = load_csv(MODEL_DIR / "confusion_matrix.csv")
+        threshold_curve = load_csv(get_model_path("threshold_curve.csv"))
+        roc_curve = load_csv(get_model_path("roc_curve.csv"))
+        confusion = load_csv(get_model_path("confusion_matrix.csv"))
 
         st.markdown("#### OOF Threshold")
         threshold = float(champion["oof_threshold"])

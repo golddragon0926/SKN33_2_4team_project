@@ -1,32 +1,50 @@
-from pathlib import Path
 import sys
-
+from pathlib import Path
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
+# 1. common 패키지 및 시뮬레이터 전용 함수 import
+from common import (
+    PROJECT_ROOT,
+    get_eda_path,
+    get_model_path,
+    get_data_path,
+    load_csv,
+    inject_common_css,
+    style_chart,
+    RED,
+    GREEN,
+    GRAY,
+)
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# 단독 실행 및 패키지 참조를 위한 sys.path 등록
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.predict import (
-    explain_customer,
     get_prediction_metadata,
     predict_customer,
 )
 
+# 💡 공통 CSS 주입 (st.metric 및 컨테이너 높이 균일화 적용)
+inject_common_css()
 
-EDA_DIR = PROJECT_ROOT / "artifacts" / "eda"
-RED = "#c2413b"
-GREEN = "#2f855a"
-
-
-@st.cache_data
-def load_csv(path: Path) -> pd.DataFrame:
-    if not path.exists():
-        raise FileNotFoundError(f"필수 파일이 없습니다: {path}")
-    return pd.read_csv(path)
+# 💡 카탈로그 파일에 누락되어 있어도 100% 한글로 변환해 주는 비즈니스 한글 사전
+FALLBACK_LABELS = {
+    "margin_net_pow_ele": "VIP 수익 기여도 (전력 순마진)",
+    "margin_gross_pow_ele": "전력 공급 총마진",
+    "forecast_meter_rent_12m": "연간 예상 계량기 대여료",
+    "net_margin": "고객 전체 순마진",
+    "cons_12m": "최근 12개월 전력 소비량",
+    "cons_gas_12m": "최근 12개월 가스 소비량",
+    "cons_last_month": "지난달 전력 소비량",
+    "forecast_cons_12m": "향후 12개월 예상 소비량",
+    "forecast_discount_energy": "예상 에너지 할인액",
+    "num_years_antig": "가입 유지 기간(년)",
+    "tenure_months": "가입 유지 기간(월)",
+}
 
 
 @st.cache_resource
@@ -34,336 +52,245 @@ def load_prediction_metadata() -> dict:
     return get_prediction_metadata(PROJECT_ROOT)
 
 
-def peer_position(value: float, q1: float, q3: float) -> str:
-    if pd.isna(value):
-        return "결측"
-    if value < q1:
-        return "낮은 편"
-    if value > q3:
-        return "높은 편"
-    return "일반 범위"
+# ==========================================
+# 메인 대시보드 (What-If 시뮬레이터)
+# ==========================================
 
-
-def fmt_number(value) -> str:
-    if pd.isna(value):
-        return "-"
-    value = float(value)
-    if abs(value) >= 1000:
-        return f"{value:,.0f}"
-    if abs(value) >= 10:
-        return f"{value:,.1f}"
-    return f"{value:,.3f}"
-
-
-def action_guides(features: list[str]) -> list[str]:
-    guides: list[str] = []
-
-    if any(
-        feature in features
-        for feature in [
-            "days_until_contract_end",
-            "days_until_renewal",
-            "contract_end_within_3m",
-            "renewal_within_3m",
-            "contract_tenure_days",
-        ]
-    ):
-        guides.append(
-            "계약 종료·갱신 일정과 현재 계약 상태를 먼저 확인"
-        )
-
-    if any(
-        feature in features
-        for feature in [
-            "recent_consumption_change_log",
-            "cons_12m",
-            "cons_last_month",
-            "forecast_cons_12m",
-        ]
-    ):
-        guides.append(
-            "최근 소비량 변화와 예상 사용 패턴을 확인"
-        )
-
-    if any(
-        "price" in feature
-        or "forecast_off_peak" in feature
-        for feature in features
-    ):
-        guides.append(
-            "최근·예상 가격 조건 변화가 있는지 확인"
-        )
-
-    if any(
-        feature in features
-        for feature in [
-            "net_margin",
-            "margin_net_pow_ele",
-            "pow_max",
-        ]
-    ):
-        guides.append(
-            "고객 규모와 수익성 정보를 함께 확인해 관리 우선순위를 판단"
-        )
-
-    return guides[:3]
-
-
-st.title("🎯 고객 위험 분석")
+st.title("🎛️ 실시간 이탈 위험 시뮬레이터 (What-If Analysis)")
 st.caption(
-    "특정 고객의 예측 위험도, 전체 고객 중 위험 순위, "
-    "모델이 위험 판단에 많이 반영한 항목을 확인합니다."
+    "특정 고객을 선택한 뒤, AI 모델이 가장 중요하게 생각하는 상위 6개 핵심 요인을 직접 조절해 보세요. "
+    "조건 변화에 따라 고객의 이탈 위험도(Risk Score)가 실시간으로 어떻게 달라지는지 예측합니다."
 )
 
+# 1. 파일 로딩 (공통 경로 함수 사용)
 try:
-    test = load_csv(
-        PROJECT_ROOT
-        / "data"
-        / "processed"
-        / "test.csv"
-    )
-    peer_ref = load_csv(
-        EDA_DIR
-        / "peer_reference.csv"
-    )
+    test_df = load_csv(get_data_path("test.csv"))
+    importance_df = load_csv(get_model_path("lightgbm_feature_importance.csv"))
+    catalog = load_csv(get_eda_path("feature_catalog.csv"))
     metadata = load_prediction_metadata()
 except Exception as exc:
-    st.error(
-        "고객 위험 분석에 필요한 파일을 불러오지 못했습니다."
-    )
+    st.error("🚨 시뮬레이션에 필요한 파일이나 모델을 불러오지 못했습니다.")
     st.exception(exc)
     st.stop()
 
-customer_ids = (
-    test["id"]
-    .astype(str)
-    .tolist()
-)
-selected_id = st.selectbox(
-    "고객 ID 선택",
-    customer_ids,
-)
+# ------------------------------------------
+# Step 1: 기준 고객 선택
+# ------------------------------------------
+st.subheader("1. 시뮬레이션 기준 고객 선택")
+customer_ids = test_df["id"].astype(str).tolist()
+selected_id = st.selectbox("📌 조건을 변경해 볼 고객 ID를 선택하세요:", customer_ids)
 
-customer = test.loc[
-    test["id"].astype(str) == selected_id
-].iloc[0]
+# 선택된 고객의 원본 데이터 (1행 DataFrame)
+original_customer = test_df.loc[test_df["id"].astype(str) == selected_id].copy()
+feature_cols = list(metadata["feature_names"])
 
-feature_cols = list(
-    metadata["feature_names"]
-)
-missing_features = [
-    feature
-    for feature in feature_cols
-    if feature not in customer.index
-]
-if missing_features:
-    st.error(
-        "현재 Test 데이터에 학습 Feature가 일부 없습니다."
-    )
-    st.code(
-        "\n".join(missing_features)
-    )
-    st.stop()
-
-input_df = pd.DataFrame(
-    [customer[feature_cols]]
-)
-
+# 원본 상태의 예측 위험도 계산
 try:
-    prediction = predict_customer(
-        input_df=input_df,
-        project_root=PROJECT_ROOT,
+    orig_pred = predict_customer(
+        input_df=original_customer[feature_cols], project_root=PROJECT_ROOT
     )
-    contrib = explain_customer(
-        input_df=input_df,
-        project_root=PROJECT_ROOT,
-    )
+    orig_score = float(orig_pred["risk_score"])
+    orig_group = str(orig_pred["risk_group"])
+    orig_icon = str(orig_pred["risk_icon"])
 except Exception as exc:
-    st.error(
-        "저장된 Champion Bundle로 예측하는 중 오류가 발생했습니다."
-    )
-    st.exception(exc)
+    st.error("🚨 모델 예측 중 오류가 발생했습니다.")
     st.stop()
 
-risk_score = float(
-    prediction["risk_score"]
-)
-top_percent = float(
-    prediction["top_percent"]
-)
-risk_group = str(
-    prediction["risk_group"]
-)
-group_icon = str(
-    prediction["risk_icon"]
-)
-
-c1, c2, c3 = st.columns(3)
-c1.metric(
-    "예측 위험도 점수",
-    f"{risk_score:.3f} / 1.000",
-)
-c2.metric(
-    "전체 고객 중 위험 순위",
-    f"상위 {top_percent:.1f}%",
-)
-c3.metric(
-    "관리 우선순위",
-    f"{group_icon} {risk_group}",
-)
-
-st.caption(
-    "위험도 점수는 고객 간 우선순위를 정하기 위한 모델 점수입니다. "
-    "별도의 확률 보정 검증 없이 '실제 이탈 확률'로 단정하지 않습니다."
-)
-
-st.markdown("---")
-st.subheader(
-    "1. 모델이 이 고객을 위험하다고 본 주요 요인"
-)
-
-if contrib.empty:
+col_base1, col_base2 = st.columns(2)
+with col_base1:
     st.info(
-        "현재 저장 모델에서 개별 기여도를 계산할 수 없습니다."
+        f"**현재 고객의 원본 위험도:** `{orig_score:.3f}` ({orig_icon} {orig_group})"
     )
-else:
-    top_contrib = (
-        contrib.head(8)
-        .sort_values("contribution")
-    )
-
-    fig = px.bar(
-        top_contrib,
-        x="contribution",
-        y="feature_label",
-        orientation="h",
-        color="direction",
-        color_discrete_map={
-            "위험 판단 증가": RED,
-            "위험 판단 감소": GREEN,
-        },
-        labels={
-            "contribution": "모델 기여도",
-            "feature_label": "",
-            "direction": "",
-        },
-    )
-    fig.update_layout(
-        height=440,
-        margin=dict(
-            l=20,
-            r=20,
-            t=20,
-            b=20,
-        ),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        legend_title_text="",
-    )
-    fig.update_yaxes(
-        gridcolor="#edf1f5"
-    )
-    st.plotly_chart(
-        fig,
-        use_container_width=True,
-    )
+with col_base2:
     st.caption(
-        "양수는 이 고객의 위험 판단을 높인 방향, 음수는 낮춘 방향입니다. "
-        "LightGBM의 개별 예측 기여도를 원래 Feature 단위로 합산한 값이며 "
-        "인과관계를 의미하지 않습니다."
+        "💡 **참고:** 아래 슬라이더에서 상위 6개 핵심 요인을 변경하면, 나머지 30여 개 특성은 이 고객의 원본 값 그대로 유지된 채 위험도를 다시 계산합니다."
     )
 
 st.markdown("---")
-st.subheader(
-    "2. 이 고객은 일반 고객과 무엇이 다른가?"
+
+# ------------------------------------------
+# Step 2: 상위 6개 Feature 추출 및 슬라이더 UI 구성
+# ------------------------------------------
+st.subheader("2. 핵심 요인 조절 (상위 6개 요인 시뮬레이션)")
+
+imp_cols = importance_df.columns.tolist()
+feat_col = next(
+    (c for c in ["feature", "feature_name", "col"] if c in imp_cols),
+    imp_cols[0],
 )
 
-rows = []
-for _, ref in peer_ref.iterrows():
-    feature = ref["feature"]
-
-    if feature not in customer.index:
-        continue
-
-    value = pd.to_numeric(
-        pd.Series(
-            [customer[feature]]
-        ),
-        errors="coerce",
-    ).iloc[0]
-
-    rows.append(
-        {
-            "항목": ref["feature_label"],
-            "선택 고객": fmt_number(
-                value
-            ),
-            "Train 중앙값": fmt_number(
-                ref["median"]
-            ),
-            "비교": peer_position(
-                value,
-                float(ref["q1"]),
-                float(ref["q3"]),
-            ),
-        }
-    )
-
-peer_table = pd.DataFrame(rows)
-st.dataframe(
-    peer_table,
-    hide_index=True,
-    use_container_width=True,
-)
-st.caption(
-    "'낮은 편/높은 편'은 Train 고객의 하위 25%·상위 25% 기준입니다. "
-    "단위가 다른 변수를 억지로 한 그래프에 합치지 않고 항목별 위치만 비교합니다."
-)
-
-st.markdown("---")
-st.subheader("3. 먼저 확인할 항목")
-
-positive_features = (
-    contrib.loc[
-        contrib["contribution"] > 0,
-        "feature",
-    ]
-    .head(8)
+top6_features = (
+    importance_df.sort_values("importance_pct", ascending=False)
+    .head(6)[feat_col]
     .tolist()
-    if not contrib.empty
-    else []
 )
 
-guides = action_guides(
-    positive_features
-)
+# 카탈로그 데이터 기반 한글 라벨 맵
+label_map = dict(zip(catalog["feature"], catalog["feature_label"]))
+desc_map = dict(zip(catalog["feature"], catalog["description"]))
 
-if guides:
-    for idx, guide in enumerate(
-        guides,
-        1,
-    ):
-        st.write(
-            f"**{idx}. {guide}**"
-        )
-else:
-    st.write(
-        "현재 모델 기여도만으로 특정 점검 항목을 우선 제시하기 어렵습니다."
-    )
+# 사용자가 조절한 값을 담을 데이터프레임 복사
+simulated_customer = original_customer.copy()
 
-st.info(
-    "이 화면은 고객에게 어떤 혜택을 반드시 제공하라고 결정하는 화면이 아닙니다. "
-    "위험도가 높은 고객을 먼저 찾고, 실제 상담·계약 정보를 확인할 우선순위를 "
-    "정하는 용도입니다."
-)
-
-with st.expander(
-    "평가용 실제 결과 확인"
-):
-    st.write(
-        f"실제 churn: {int(customer['churn'])}"
-    )
+with st.container(border=True):
+    st.markdown("#### 🎛️ 실시간 시뮬레이션 제어판")
     st.caption(
-        "이 값은 프로젝트 평가용 Test 데이터의 정답입니다. "
-        "실제 운영 환경에서는 예측 시점에 알 수 없는 값입니다."
+        "아래 슬라이더는 **현재 선택한 고객의 실제 데이터**로 세팅되어 있습니다. "
+        "마우스로 값을 좌우로 움직여 영업 조건을 변경해 보세요! (움직이는 즉시 하단 3번 결과에 반영됩니다)"
+    )
+    st.markdown("---")
+
+    sim_cols = st.columns(2)
+    for idx, feature_name in enumerate(top6_features):
+        col_idx = idx % 2
+        with sim_cols[col_idx]:
+            # 1순위: catalog 한글 라벨 ➔ 2순위: FALLBACK_LABELS 사전 ➔ 3순위: 원본 변수명
+            korean_label = label_map.get(
+                feature_name, FALLBACK_LABELS.get(feature_name, feature_name)
+            )
+
+            orig_val = float(original_customer[feature_name].iloc[0])
+
+            # 전체 데이터 분포 기준 슬라이더 범위 설정
+            min_val = float(test_df[feature_name].min())
+            max_val = float(test_df[feature_name].max())
+
+            if min_val == max_val:
+                min_val = orig_val * 0.5
+                max_val = orig_val * 1.5 if orig_val != 0 else 100.0
+
+            is_integer = test_df[feature_name].dtype.kind in "biu"
+            step_val = 1.0 if is_integer else (max_val - min_val) / 100.0
+            step_val = max(step_val, 0.01) if not is_integer else 1.0
+
+            # 물음표(?) 이모티콘 툴팁 구성
+            desc_text = desc_map.get(feature_name, "상세 설명이 등록되어 있지 않습니다.")
+            help_tooltip = (
+                f"📌 **영문 변수명:** `{feature_name}`\n\n"
+                f"📝 **설명:** {desc_text}"
+            )
+
+            # 슬라이더 생성
+            new_val = st.slider(
+                label=f"**{idx + 1}. {korean_label}**",
+                min_value=float(min_val),
+                max_value=float(max_val),
+                value=float(orig_val),
+                step=float(step_val),
+                help=help_tooltip,
+            )
+            simulated_customer[feature_name] = new_val
+
+# ------------------------------------------
+# Step 3: 변경된 데이터로 실시간 예측 (Real-time Prediction)
+# ------------------------------------------
+sim_pred = predict_customer(
+    input_df=simulated_customer[feature_cols], project_root=PROJECT_ROOT
+)
+sim_score = float(sim_pred["risk_score"])
+sim_group = str(sim_pred["risk_group"])
+sim_icon = str(sim_pred["risk_icon"])
+
+# ------------------------------------------
+# Step 4: 시뮬레이션 결과 비교 시각화
+# ------------------------------------------
+st.markdown("---")
+st.subheader("3. 실시간 AI 예측 결과 비교")
+
+score_diff = sim_score - orig_score
+diff_color = (
+    "normal"
+    if abs(score_diff) < 0.001
+    else ("inverse" if score_diff > 0 else "normal")
+)
+
+# 그룹 변화에 따른 델타 문구 생성
+if orig_group == sim_group:
+    group_delta = f"{orig_icon} {sim_group} 상태 유지"
+    group_delta_color = "off"
+else:
+    group_delta = f"{orig_group} ➔ {sim_group} 변경"
+    group_delta_color = "normal" if sim_score < orig_score else "inverse"
+
+res_col1, res_col2, res_col3 = st.columns(3)
+
+res_col1.metric(
+    "변경 전 (원본) 위험도",
+    f"{orig_score:.3f}",
+    f"{orig_icon} {orig_group}",
+    delta_color="off",
+)
+
+res_col2.metric(
+    "변경 후 (시뮬레이션) 위험도",
+    f"{sim_score:.3f}",
+    f"{score_diff:+.3f}",
+    delta_color=diff_color,
+)
+
+res_col3.metric(
+    "예측 우선순위 상태",
+    f"{sim_icon} {sim_group}",
+    group_delta,
+    delta_color=group_delta_color,
+)
+
+# 바 차트로 전/후 위험도 시각 비교
+fig = go.Figure()
+fig.add_trace(
+    go.Bar(
+        y=["이탈 위험도 점수"],
+        x=[orig_score],
+        name="변경 전 (원본)",
+        orientation="h",
+        marker=dict(color=GRAY, opacity=0.7),
+        text=[f"원본: {orig_score:.3f}"],
+        textposition="inside",
+    )
+)
+fig.add_trace(
+    go.Bar(
+        y=["이탈 위험도 점수"],
+        x=[sim_score],
+        name="변경 후 (시뮬레이션)",
+        orientation="h",
+        marker=dict(color=RED if sim_score > orig_score else GREEN),
+        text=[f"시뮬레이션: {sim_score:.3f}"],
+        textposition="inside",
+    )
+)
+fig.update_layout(
+    barmode="group",
+    xaxis=dict(range=[0, 1.0], title="위험도 점수 (0 ~ 1.0)"),
+    yaxis=dict(title=""),
+    legend=dict(
+        orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
+    ),
+)
+st.plotly_chart(style_chart(fig, height=220), use_container_width=True)
+
+# 실무 액션 가이드 인사이트 박스
+if score_diff < -0.05:
+    st.markdown(
+        f"""
+        <div class="insight-box" style="border-left-color: {GREEN}; background: #f0fff4;">
+        🎉 <b>긍정적 신호:</b> 조건을 변경했더니 이탈 위험이 <b>{abs(score_diff) * 100:.1f}%p 감소</b>했습니다!<br>
+        실제 영업 현장에서 이 고객에게 해당 조건(예: 가격 할인, 계약 연장 등)을 제시하면 고객을 유지할 확률이 크게 높아집니다.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+elif score_diff > 0.05:
+    st.markdown(
+        f"""
+        <div class="insight-box" style="border-left-color: {RED}; background: #fff5f5;">
+        🚨 <b>위험 경고:</b> 변경하신 조건은 오히려 이탈 위험을 <b>{score_diff * 100:.1f}%p 증가</b>시킵니다!<br>
+        해당 특성이 악화되지 않도록 사전 방어 전략을 세우는 것이 중요합니다.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+else:
+    st.info(
+        "💡 조건 변화에 따른 위험도 차이가 크지 않습니다. 다른 핵심 요인 슬라이더를 더 과감하게 움직여 보세요!"
     )
