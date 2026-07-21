@@ -8,7 +8,7 @@ import streamlit as st
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-EDA_DIR = PROJECT_ROOT / "artifacts" / "streamlit" / "eda"
+EDA_DIR = PROJECT_ROOT / "artifacts" / "eda"
 NAVY = "#17324d"
 ORANGE = "#f59e0b"
 LIGHT = "#d9e2ec"
@@ -19,7 +19,7 @@ def load_csv(path: Path) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(
             f"필수 파일이 없습니다: {path}\n"
-            "전처리 코드를 먼저 실행해 Streamlit용 EDA CSV를 생성하세요."
+            "전처리 코드를 먼저 실행해 artifacts/eda 결과를 생성하세요."
         )
     return pd.read_csv(path)
 
