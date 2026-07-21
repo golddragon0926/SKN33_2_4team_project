@@ -229,10 +229,10 @@ data/processed/
 
 ## 10. Streamlit용 EDA 데이터
 
-전처리 코드를 실행하면 Streamlit에서 다시 집계하지 않도록 필요한 요약 결과도 함께 저장한다.
+전처리 코드를 실행할 때 Dashboard에 필요한 EDA 요약 결과를 `artifacts/eda/`에 함께 저장한다. Streamlit에서는 원본 데이터를 다시 집계하지 않고 이 Artifact를 읽어 보여준다.
 
 ```text
-artifacts/streamlit/eda/
+artifacts/eda/
 ```
 
 주요 내용:
