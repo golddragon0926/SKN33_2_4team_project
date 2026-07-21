@@ -8,10 +8,6 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-try:
-    from streamlit_exports import export_base_eda_artifacts
-except ImportError:
-    from preprocessing.streamlit_exports import export_base_eda_artifacts
 
 TARGET_COL = "churn"
 ID_COL = "id"
@@ -52,6 +48,121 @@ CLIENT_FEATURE_COLS = ["contract_end_within_3m", "recent_consumption_change_log"
 PRICE_FEATURE_COLS = list(PRICE_FEATURE_SPECS.values())
 CROSS_FEATURE_COLS = ["forecast_off_peak_energy_change", "forecast_off_peak_power_change"]
 ENGINEERED_FEATURE_COLS = CLIENT_FEATURE_COLS + PRICE_FEATURE_COLS + CROSS_FEATURE_COLS
+
+EDA_ARTIFACT_DIR = Path("artifacts") / "eda"
+
+
+def _save_eda_artifact(df: pd.DataFrame, path: Path) -> None:
+    """EDA 결과를 artifacts/eda 아래 CSV로 저장한다."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(path, index=False, encoding="utf-8-sig")
+
+
+def _export_base_eda_artifacts(
+    raw: dict[str, Any],
+    built: dict[str, Any],
+) -> Path:
+    """
+    data_preprocessing.py 단계에서 이미 계산 가능한 기본 EDA 결과를 저장한다.
+
+    Streamlit은 이 파일들을 읽기만 하며 원본 데이터에서 다시 집계하지 않는다.
+    """
+    project_root = Path(raw["project_root"])
+    out_dir = project_root / EDA_ARTIFACT_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    client = raw["client"].copy()
+    price = raw["price"].copy()
+
+    overview = pd.DataFrame(
+        {
+            "metric": [
+                "client_rows",
+                "client_columns",
+                "price_rows",
+                "price_columns",
+                "unique_customers",
+                "train_customers",
+                "test_customers",
+                "overall_churn_rate",
+                "a0_feature_count",
+            ],
+            "value": [
+                len(client),
+                client.shape[1],
+                len(price),
+                price.shape[1],
+                client[ID_COL].nunique(),
+                len(raw["train_client"]),
+                len(raw["test_client"]),
+                float(client[TARGET_COL].mean()),
+                int(built["X_train_final"].shape[1]),
+            ],
+        }
+    )
+    _save_eda_artifact(overview, out_dir / "dataset_overview.csv")
+
+    churn_distribution = (
+        client[TARGET_COL]
+        .value_counts(dropna=False)
+        .rename_axis(TARGET_COL)
+        .reset_index(name="count")
+        .sort_values(TARGET_COL)
+    )
+    churn_distribution["rate"] = churn_distribution["count"] / len(client)
+    churn_distribution["label"] = churn_distribution[TARGET_COL].map(
+        {0: "유지", 1: "이탈"}
+    )
+    _save_eda_artifact(churn_distribution, out_dir / "churn_distribution.csv")
+
+    missing_rows: list[dict[str, Any]] = []
+    for source_name, frame in [("고객 데이터", client), ("가격 데이터", price)]:
+        missing = frame.isna().sum()
+        for feature, missing_count in missing.items():
+            if missing_count == 0:
+                continue
+            missing_rows.append(
+                {
+                    "source": source_name,
+                    "feature": feature,
+                    "missing_count": int(missing_count),
+                    "missing_rate": float(missing_count / len(frame)),
+                }
+            )
+
+    raw_missing = pd.DataFrame(
+        missing_rows,
+        columns=["source", "feature", "missing_count", "missing_rate"],
+    )
+    if not raw_missing.empty:
+        raw_missing = raw_missing.sort_values(
+            ["missing_rate", "missing_count"],
+            ascending=False,
+        )
+    _save_eda_artifact(raw_missing, out_dir / "raw_missing_values.csv")
+
+    flow = pd.DataFrame(
+        {
+            "step": [1, 2, 3, 4, 5],
+            "stage": [
+                "원본 확인",
+                "고객 단위 분할",
+                "가격 이력 집계",
+                "A0 Feature 생성",
+                "A3 계약 Feature 추가",
+            ],
+            "description": [
+                "고객 데이터와 월별 가격 데이터의 구조·결측·중복을 확인",
+                "같은 고객이 Train/Test에 동시에 들어가지 않도록 고객 ID 기준 80:20 분할",
+                "2016-01-01 이전 월별 가격 이력을 고객 1행으로 집계",
+                "소비·가격·계약 관련 A0 25개 Feature 구성",
+                "계약 생애주기를 표현하는 12개 Feature를 추가해 최종 37개 Feature 구성",
+            ],
+        }
+    )
+    _save_eda_artifact(flow, out_dir / "preprocessing_flow.csv")
+    return out_dir
+
 
 
 def find_project_root(start: str | Path | None = None) -> Path:
@@ -609,8 +720,8 @@ def run_preprocessing(
     )
 
     if export:
-        streamlit_dir = export_base_eda_artifacts(raw, built)
-        print(f"Streamlit EDA 데이터 저장 완료: {streamlit_dir}")
+        eda_artifact_dir = _export_base_eda_artifacts(raw, built)
+        print(f"EDA Artifact 저장 완료: {eda_artifact_dir}")
 
     return {**raw, **built}
 
