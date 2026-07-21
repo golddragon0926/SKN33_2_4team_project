@@ -4,7 +4,6 @@ import streamlit as st
 from common import (
     get_eda_path,
     get_model_path,
-    get_app_navigation,
     load_csv,
     metric_value,
     inject_common_css,
@@ -17,6 +16,20 @@ st.set_page_config(
 )
 
 inject_common_css()
+
+def get_app_navigation(show_home_func):
+    return st.navigation(
+        {
+            "MAIN": [
+                st.Page(show_home_func, title="홈", icon="🏠")
+            ],
+            "ANALYSIS": [
+                st.Page("pages/1_Dashboard.py", title="고객 데이터 인사이트", icon="📊"),
+                st.Page("pages/2_Model_Performance.py", title="모델 성능 평가", icon="🤖"),
+                st.Page("pages/3_Realtime_Prediction.py", title="실시간 예측 · 마케팅 전략", icon="🎯"),
+            ],
+        }
+    )
 
 def show_home() -> None:
     st.title("⚡ PowerCo 고객 이탈 분석")
@@ -80,15 +93,15 @@ def show_home() -> None:
             ):
                 st.switch_page("pages/1_Dashboard.py")
 
-    # 2번 카드: 2_Model_Performance.py 연동
+    # 2번 카드: 2_Model_Performance.py 연동 (제목 및 설명 정돈)
     with col_guide2:
         with st.container(border=True):
             st.markdown(
-                "<h4 style='text-align: center; margin-bottom: 12px;'>🤖 2. 모델 성능 & 유지전략</h4>",
+                "<h4 style='text-align: center; margin-bottom: 12px;'>🤖 2. AI 모델 성능 평가 및 검증</h4>",
                 unsafe_allow_html=True,
             )
             st.write(
-                "알고리즘 비교 평가, 타겟 마케팅 용량별 이탈 포착률 시뮬레이션 및 변수 개선 효과를 검증합니다."
+                "후보 알고리즘 비교, PR Curve, 교차검증 지표 및 파생변수 추가에 따른 예측 성능 개선 효과를 검증합니다."
             )
             st.write("")
             if st.button(
@@ -96,21 +109,20 @@ def show_home() -> None:
             ):
                 st.switch_page("pages/2_Model_Performance.py")
 
-    # 3번 카드: 3_Realtime_Prediction.py 연동
-    with col_guide3:
-        with st.container(border=True):
-            st.markdown(
-                "<h4 style='text-align: center; margin-bottom: 12px;'>🎛️ 3. 실시간 위험 시뮬레이터</h4>",
-                unsafe_allow_html=True,
-            )
-            st.write(
-                "개별 고객을 선택하고 What-If 슬라이더로 주요 핵심 조건 변경 시 위험도 변화를 실시간으로 측정합니다."
-            )
-            st.write("")
-            if st.button(
-                    "위험 시뮬레이션 실행 ➔", key="btn_p3", use_container_width=True
-            ):
-                st.switch_page("pages/3_Realtime_Prediction.py")
-
+        # 3번 카드: 3_Realtime_Prediction.py 연동
+        with col_guide3:
+            with st.container(border=True):
+                st.markdown(
+                    "<h4 style='text-align: center; margin-bottom: 12px;'>🎯 3. 실시간 예측 & 마케팅 전략</h4>",
+                    unsafe_allow_html=True,
+                )
+                st.write(
+                    "개별 고객 조건 변경 시 위험도 변동을 실시간 측정하고, 진단 등급에 따른 맞춤형 현장 대응 전략을 확인합니다."
+                )
+                st.write("")
+                if st.button(
+                        "위험 시뮬레이션 실행 ➔", key="btn_p3", use_container_width=True
+                ):
+                    st.switch_page("pages/3_Realtime_Prediction.py")
 pg = get_app_navigation(show_home)
 pg.run()

@@ -28,10 +28,10 @@ from src.predict import (
     predict_customer,
 )
 
-# 💡 공통 CSS 주입 (st.metric 및 컨테이너 높이 균일화 적용)
+# 공통 CSS 주입
 inject_common_css()
 
-# 💡 카탈로그 파일에 누락되어 있어도 100% 한글로 변환해 주는 비즈니스 한글 사전
+# 카탈로그 한글 사전
 FALLBACK_LABELS = {
     "margin_net_pow_ele": "VIP 수익 기여도 (전력 순마진)",
     "margin_gross_pow_ele": "전력 공급 총마진",
@@ -56,13 +56,12 @@ def load_prediction_metadata() -> dict:
 # 메인 대시보드 (What-If 시뮬레이터)
 # ==========================================
 
-st.title("🎛️ 실시간 이탈 위험 시뮬레이터 (What-If Analysis)")
+st.title("🎛️ 실시간 이탈 위험 시뮬레이터")
 st.caption(
-    "특정 고객을 선택한 뒤, AI 모델이 가장 중요하게 생각하는 상위 6개 핵심 요인을 직접 조절해 보세요. "
-    "조건 변화에 따라 고객의 이탈 위험도(Risk Score)가 실시간으로 어떻게 달라지는지 예측합니다."
+    "특정 고객을 선택한 뒤 핵심 요인을 직접 조절하여 영업 조건 변화에 따른 이탈 위험도 점수(Risk Score)의 실시간 변동과 대응 전략을 확인합니다."
 )
 
-# 1. 파일 로딩 (공통 경로 함수 사용)
+# 1. 파일 로딩
 try:
     test_df = load_csv(get_data_path("test.csv"))
     importance_df = load_csv(get_model_path("lightgbm_feature_importance.csv"))
@@ -76,15 +75,14 @@ except Exception as exc:
 # ------------------------------------------
 # Step 1: 기준 고객 선택
 # ------------------------------------------
-st.subheader("1. 시뮬레이션 기준 고객 선택")
+st.subheader("1. 시뮬레이션 대상 고객 선택")
 customer_ids = test_df["id"].astype(str).tolist()
-selected_id = st.selectbox("📌 조건을 변경해 볼 고객 ID를 선택하세요:", customer_ids)
+selected_id = st.selectbox("📌 **시뮬레이션을 진행할 고객 ID 선택**", customer_ids)
 
-# 선택된 고객의 원본 데이터 (1행 DataFrame)
 original_customer = test_df.loc[test_df["id"].astype(str) == selected_id].copy()
 feature_cols = list(metadata["feature_names"])
 
-# 원본 상태의 예측 위험도 계산
+# 원본 상태 예측
 try:
     orig_pred = predict_customer(
         input_df=original_customer[feature_cols], project_root=PROJECT_ROOT
@@ -99,11 +97,11 @@ except Exception as exc:
 col_base1, col_base2 = st.columns(2)
 with col_base1:
     st.info(
-        f"**현재 고객의 원본 위험도:** `{orig_score:.3f}` ({orig_icon} {orig_group})"
+        f"**선택 고객 원본 위험도 점수:** `{orig_score:.3f}` ({orig_icon} {orig_group})"
     )
 with col_base2:
     st.caption(
-        "💡 **참고:** 아래 슬라이더에서 상위 6개 핵심 요인을 변경하면, 나머지 30여 개 특성은 이 고객의 원본 값 그대로 유지된 채 위험도를 다시 계산합니다."
+        "💡 **안내:** 상위 6개 핵심 요인을 변경하면 나머지 30여 개 특성은 원본 값을 유지한 채 위험도를 재산출합니다."
     )
 
 st.markdown("---")
@@ -111,7 +109,7 @@ st.markdown("---")
 # ------------------------------------------
 # Step 2: 상위 6개 Feature 추출 및 슬라이더 UI 구성
 # ------------------------------------------
-st.subheader("2. 핵심 요인 조절 (상위 6개 요인 시뮬레이션)")
+st.subheader("2. 주요 요인 시뮬레이션 제어")
 
 imp_cols = importance_df.columns.tolist()
 feat_col = next(
@@ -125,18 +123,15 @@ top6_features = (
     .tolist()
 )
 
-# 카탈로그 데이터 기반 한글 라벨 맵
 label_map = dict(zip(catalog["feature"], catalog["feature_label"]))
 desc_map = dict(zip(catalog["feature"], catalog["description"]))
 
-# 사용자가 조절한 값을 담을 데이터프레임 복사
 simulated_customer = original_customer.copy()
 
 with st.container(border=True):
     st.markdown("#### 🎛️ 실시간 시뮬레이션 제어판")
     st.caption(
-        "아래 슬라이더는 **현재 선택한 고객의 실제 데이터**로 세팅되어 있습니다. "
-        "마우스로 값을 좌우로 움직여 영업 조건을 변경해 보세요! (움직이는 즉시 하단 3번 결과에 반영됩니다)"
+        "슬라이더를 통해 영업 조건(가격, 계약 기간 등)을 변경해 보세요. 하단 예측 결과에 실시간으로 즉시 반영됩니다."
     )
     st.markdown("---")
 
@@ -144,14 +139,12 @@ with st.container(border=True):
     for idx, feature_name in enumerate(top6_features):
         col_idx = idx % 2
         with sim_cols[col_idx]:
-            # 1순위: catalog 한글 라벨 ➔ 2순위: FALLBACK_LABELS 사전 ➔ 3순위: 원본 변수명
             korean_label = label_map.get(
                 feature_name, FALLBACK_LABELS.get(feature_name, feature_name)
             )
 
             orig_val = float(original_customer[feature_name].iloc[0])
 
-            # 전체 데이터 분포 기준 슬라이더 범위 설정
             min_val = float(test_df[feature_name].min())
             max_val = float(test_df[feature_name].max())
 
@@ -163,14 +156,12 @@ with st.container(border=True):
             step_val = 1.0 if is_integer else (max_val - min_val) / 100.0
             step_val = max(step_val, 0.01) if not is_integer else 1.0
 
-            # 물음표(?) 이모티콘 툴팁 구성
             desc_text = desc_map.get(feature_name, "상세 설명이 등록되어 있지 않습니다.")
             help_tooltip = (
                 f"📌 **영문 변수명:** `{feature_name}`\n\n"
                 f"📝 **설명:** {desc_text}"
             )
 
-            # 슬라이더 생성
             new_val = st.slider(
                 label=f"**{idx + 1}. {korean_label}**",
                 min_value=float(min_val),
@@ -182,7 +173,7 @@ with st.container(border=True):
             simulated_customer[feature_name] = new_val
 
 # ------------------------------------------
-# Step 3: 변경된 데이터로 실시간 예측 (Real-time Prediction)
+# Step 3: 변경된 데이터로 실시간 예측
 # ------------------------------------------
 sim_pred = predict_customer(
     input_df=simulated_customer[feature_cols], project_root=PROJECT_ROOT
@@ -192,10 +183,13 @@ sim_group = str(sim_pred["risk_group"])
 sim_icon = str(sim_pred["risk_icon"])
 
 # ------------------------------------------
-# Step 4: 시뮬레이션 결과 비교 시각화
+# Step 4: 실시간 AI 예측 & 맞춤형 대응 전략 통합 섹션
 # ------------------------------------------
 st.markdown("---")
-st.subheader("3. 실시간 AI 예측 결과 비교")
+st.subheader("3. 실시간 AI 예측 및 맞춤형 현장 대응 전략")
+st.caption(
+    "조건 변경에 따른 이탈 위험도(Risk Score)의 실시간 변동 결과와 판정된 등급별 현장 액션 가이드를 동시에 확인합니다."
+)
 
 score_diff = sim_score - orig_score
 diff_color = (
@@ -212,30 +206,31 @@ else:
     group_delta = f"{orig_group} ➔ {sim_group} 변경"
     group_delta_color = "normal" if sim_score < orig_score else "inverse"
 
+# 1. 핵심 수치 메트릭 카드 3개
 res_col1, res_col2, res_col3 = st.columns(3)
 
 res_col1.metric(
-    "변경 전 (원본) 위험도",
+    "변경 전 (원본) 위험도 점수",
     f"{orig_score:.3f}",
     f"{orig_icon} {orig_group}",
     delta_color="off",
 )
 
 res_col2.metric(
-    "변경 후 (시뮬레이션) 위험도",
+    "변경 후 (시뮬레이션) 위험도 점수",
     f"{sim_score:.3f}",
-    f"{score_diff:+.3f}",
+    f"{score_diff:+.3f} pt",
     delta_color=diff_color,
 )
 
 res_col3.metric(
-    "예측 우선순위 상태",
+    "관리 우선순위 등급",
     f"{sim_icon} {sim_group}",
     group_delta,
     delta_color=group_delta_color,
 )
 
-# 바 차트로 전/후 위험도 시각 비교
+# 2. 전/후 비교 바 차트
 fig = go.Figure()
 fig.add_trace(
     go.Bar(
@@ -261,36 +256,87 @@ fig.add_trace(
 )
 fig.update_layout(
     barmode="group",
-    xaxis=dict(range=[0, 1.0], title="위험도 점수 (0 ~ 1.0)"),
+    xaxis=dict(range=[0, 1.0], title="상대적 위험도 점수 (0.0 ~ 1.0)"),
     yaxis=dict(title=""),
     legend=dict(
         orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
     ),
 )
-st.plotly_chart(style_chart(fig, height=220), use_container_width=True)
+st.plotly_chart(style_chart(fig, height=200), use_container_width=True)
 
-# 실무 액션 가이드 인사이트 박스
-if score_diff < -0.05:
-    st.markdown(
-        f"""
-        <div class="insight-box" style="border-left-color: {GREEN}; background: #f0fff4;">
-        🎉 <b>긍정적 신호:</b> 조건을 변경했더니 이탈 위험이 <b>{abs(score_diff) * 100:.1f}%p 감소</b>했습니다!<br>
-        실제 영업 현장에서 이 고객에게 해당 조건(예: 가격 할인, 계약 연장 등)을 제시하면 고객을 유지할 확률이 크게 높아집니다.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-elif score_diff > 0.05:
-    st.markdown(
-        f"""
-        <div class="insight-box" style="border-left-color: {RED}; background: #fff5f5;">
-        🚨 <b>위험 경고:</b> 변경하신 조건은 오히려 이탈 위험을 <b>{score_diff * 100:.1f}%p 증가</b>시킵니다!<br>
-        해당 특성이 악화되지 않도록 사전 방어 전략을 세우는 것이 중요합니다.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+st.caption(
+    "⚠️ **참고:** 산출된 이탈 위험도 점수(0.0~1.0)는 고객 간 상대적 이탈 위험 순위를 나타내는 수치이며, 절대적인 이탈 확률(%)을 의미하지 않습니다."
+)
+
+st.write("")
+
+# 3. 판정된 위험도 등급(sim_group 또는 sim_score)에 따른 맞춤형 액션 카드 1개 출력
+if "초고위험" in sim_group or sim_score >= 0.7:
+    with st.container(border=True):
+        st.markdown(
+            f"### 🔴 판정 등급: **Top 5% 초고위험군** ({sim_icon} `{sim_score:.3f}pt`)"
+        )
+        st.markdown(
+            """
+            **[🚨 High-Touch 1:1 영업 전담 대응 프로토콜]**
+
+            * **담당 채널:** 영업 담당자 1:1 전담 밀착 케어 (전화/방문 접촉)
+            * **권장 접촉 시점:** 계약 만료 **D-90일 전** 선제 상담 착수
+            * **현장 실행 오퍼 (Action Offer):**
+              1. **조건부 단가 할인:** 계약 연장(1~2년) 동의 시 단가 **3~5% 한정 할인** 결합
+              2. **맞춤형 요금제 컨설팅:** 전력 사용 패턴 분석을 통한 주간/야간 선택형 요금제 변경 제안
+              3. **VIP 케어 서비스:** **에너지 효율화 진단 리포트** 무료 제공으로 서비스 락인(Lock-in)
+            """
+        )
+
+elif "고위험" in sim_group or sim_score >= 0.4:
+    with st.container(border=True):
+        st.markdown(
+            f"### 🟡 판정 등급: **Top 5% ~ 10% 고위험군** ({sim_icon} `{sim_score:.3f}pt`)"
+        )
+        st.markdown(
+            """
+            **[⚡ Automated CRM 타겟 마케팅 프로토콜]**
+
+            * **담당 채널:** CRM 자동화 마케팅 채널 (알림톡 / 이메일 / SMS)
+            * **권장 접촉 시점:** 계약 만료 **D-60일 전** 타겟 메시지 발송
+            * **현장 실행 오퍼 (Action Offer):**
+              1. **재계약 할인 쿠폰:** CRM 발송을 통한 **[재계약 감사 단가 할인 쿠폰]** 즉시 전달
+              2. **가격 민감도 방어:** 단기 가격 인상 부담 완화를 위한 **야간 요금 전환 옵션** 안내
+              3. **타임리밋 프로모션:** "2주 이내 재계약 체결 시 혜택 확정" 조건으로 빠른 의사결정 유도
+            """
+        )
+
+elif "중위험" in sim_group or sim_score >= 0.2:
+    with st.container(border=True):
+        st.markdown(
+            f"### 🟢 판정 등급: **Top 10% ~ 20% 중위험군** ({sim_icon} `{sim_score:.3f}pt`)"
+        )
+        st.markdown(
+            """
+            **[📱 Low-Cost 디지털 릴레이션십 프로토콜]**
+
+            * **담당 채널:** 디지털 앱 푸시 및 정기 이메일 뉴스레터
+            * **권장 접촉 시점:** 계약 만료 **D-30일 전** 정기 노출
+            * **현장 실행 오퍼 (Action Offer):**
+              1. **인포머티브 안내:** 무분별한 할인 대신 **계약 유지 시 제공되는 기본 부가 혜택** 안내
+              2. **만족도 체크:** 정기 설문조사 연계를 통해 서비스 잠재 불만 요소 사전 파악
+              3. **에너지 절감 팁:** 정기 모니터링 팁 전달을 통한 고객 브랜드 친밀도 유지
+            """
+        )
+
 else:
-    st.info(
-        "💡 조건 변화에 따른 위험도 차이가 크지 않습니다. 다른 핵심 요인 슬라이더를 더 과감하게 움직여 보세요!"
-    )
+    with st.container(border=True):
+        st.markdown(
+            f"### 🔵 판정 등급: **안정군 / 저위험군** ({sim_icon} `{sim_score:.3f}pt`)"
+        )
+        st.markdown(
+            """
+            **[✅ 정기 리포트 및 마진 보호 프로토콜]**
+
+            * **담당 채널:** 월간 정기 청구서 및 서비스 알림
+            * **현장 실행 오퍼 (Action Offer):**
+              1. **마진율 보호:** 이탈 위험이 매우 낮으므로 **추가 가격 할인 프로모션 지양** (비용 절감)
+              2. **기본 케어:** 신규 서비스 안내 및 월간 전력 사용량 분석 리포트 자동 발송
+            """
+        )
