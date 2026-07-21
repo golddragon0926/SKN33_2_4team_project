@@ -3,7 +3,6 @@ from .config import (
     get_eda_path,
     get_model_path,
     get_data_path,
-    get_app_navigation,
 )
 from .data_loader import load_csv, metric_value
 from .ui_styles import (
