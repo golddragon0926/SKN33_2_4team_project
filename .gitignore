@@ -1,20 +1,22 @@
-# 파이썬 가상 환경 폴더
-.venv/
-
-# 파이썬 캐시 폴더(임시 폴더)
+# Python
 __pycache__/
+*.py[cod]
 
-# 주피터 노트북 자동 저장 폴더
-.ipynb_checkpoints/
+# PyCharm
+.idea/
 
-# Mac os Finder 폴더 보기 설정이 저장된 파일
-.DS_Store
+# Virtual environments
+.venv/
+venv/
+env/
 
-# .py 파일 실행 시 생성되는 컴파일 캐시 파일
-*.pyc
-
-# 파이참 설정
-.idea
-
-# dotenv 무시 설정
+# Secrets
 .env
+*.env
+.streamlit/secrets.toml
+*.pem
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
