@@ -1,47 +1,22 @@
 from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+# common 패키지에서 필요한 모든 요소를 한 번에 import
+from common import (
+    get_eda_path,
+    load_csv,
+    metric_value,
+    inject_common_css,
+    style_chart,
+    NAVY,
+    ORANGE,
+)
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-EDA_DIR = PROJECT_ROOT / "artifacts" / "eda"
-NAVY = "#17324d"
-ORANGE = "#f59e0b"
-LIGHT = "#d9e2ec"
-
-
-@st.cache_data
-def load_csv(path: Path) -> pd.DataFrame:
-    if not path.exists():
-        raise FileNotFoundError(
-            f"필수 파일이 없습니다: {path}\n"
-            "전처리 코드를 먼저 실행해 artifacts/eda 결과를 생성하세요."
-        )
-    return pd.read_csv(path)
-
-
-def metric_value(df: pd.DataFrame, metric: str, default=None):
-    matched = df.loc[df["metric"] == metric, "value"]
-    return matched.iloc[0] if not matched.empty else default
-
-
-def style_chart(fig, height: int = 390):
-    fig.update_layout(
-        height=height,
-        margin=dict(l=20, r=20, t=45, b=20),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(size=13),
-        legend_title_text="",
-    )
-    fig.update_xaxes(showgrid=False)
-    fig.update_yaxes(gridcolor="#edf1f5")
-    return fig
-
+inject_common_css()
 
 def profile_insight(profile: pd.DataFrame, overall_rate: float) -> str:
     valid = profile.loc[profile["customer_count"] >= 30].copy()
@@ -75,8 +50,11 @@ def plot_profile(profile: pd.DataFrame, overall_rate: float, title: str):
         texttemplate="%{text:.1f}%",
         textposition="outside",
         hovertemplate=(
-            "%{x}<br>값 범위: %{customdata[0]}<br>고객 수: %{customdata[1]:,}명"
-            "<br>이탈 고객: %{customdata[2]:,}명<br>이탈률: %{y:.1f}%<extra></extra>"
+            "<b>%{x}</b><br>"
+            "값 범위: %{customdata[0]}<br>"
+            "고객 수: %{customdata[1]:,}명<br>"
+            "이탈 고객: %{customdata[2]:,}명<br>"
+            "이탈률: %{y:.1f}%<extra></extra>"
         ),
     )
     fig.add_hline(
@@ -84,9 +62,14 @@ def plot_profile(profile: pd.DataFrame, overall_rate: float, title: str):
         line_dash="dash",
         line_color=ORANGE,
         annotation_text=f"전체 {overall_rate:.1%}",
+        annotation_position="top right",
     )
     return style_chart(fig)
 
+
+# ==========================================
+# 메인 페이지 시작
+# ==========================================
 
 st.title("📊 고객 데이터 인사이트")
 st.caption(
@@ -94,20 +77,22 @@ st.caption(
     "그래프는 원인 증명이 아니라 모델링 전에 발견한 연관 패턴입니다."
 )
 
+# 1. EDA 관련 데이터 파일 안전 로드
 try:
-    overview = load_csv(EDA_DIR / "dataset_overview.csv")
-    a3_overview = load_csv(EDA_DIR / "a3_overview.csv")
-    churn = load_csv(EDA_DIR / "churn_distribution.csv")
-    profiles = load_csv(EDA_DIR / "feature_churn_profile.csv")
-    catalog = load_csv(EDA_DIR / "feature_catalog.csv")
-    risk_matrix = load_csv(EDA_DIR / "risk_segment_matrix.csv")
-    missing = load_csv(EDA_DIR / "a3_missing_values.csv")
-    flow = load_csv(EDA_DIR / "preprocessing_flow.csv")
+    overview = load_csv(get_eda_path("dataset_overview.csv"))
+    a3_overview = load_csv(get_eda_path("a3_overview.csv"))
+    churn = load_csv(get_eda_path("churn_distribution.csv"))
+    profiles = load_csv(get_eda_path("feature_churn_profile.csv"))
+    catalog = load_csv(get_eda_path("feature_catalog.csv"))
+    risk_matrix = load_csv(get_eda_path("risk_segment_matrix.csv"))
+    missing = load_csv(get_eda_path("a3_missing_values.csv"))
+    flow = load_csv(get_eda_path("preprocessing_flow.csv"))
 except Exception as exc:
-    st.error("EDA 시각화용 결과를 불러오지 못했습니다.")
+    st.error("🚨 EDA 시각화용 데이터 파일들을 불러오지 못했습니다.")
     st.exception(exc)
     st.stop()
 
+# 2. 상단 KPI 메트릭 작성
 customer_count = int(float(metric_value(overview, "unique_customers", 0)))
 train_count = int(float(metric_value(overview, "train_customers", 0)))
 price_rows = int(float(metric_value(overview, "price_rows", 0)))
@@ -115,13 +100,18 @@ overall_rate = float(metric_value(overview, "overall_churn_rate", 0))
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("전체 고객", f"{customer_count:,}명")
-c2.metric("컬럼 분석 기준", f"Train {train_count:,}명")
+c2.metric("컬럼 분석 기준", f"{train_count:,}명")
 c3.metric("전체 이탈률", f"{overall_rate:.1%}")
 c4.metric("월별 가격 기록", f"{price_rows:,}건")
 
 st.markdown("---")
+
+# ------------------------------------------
+# Section 1: 전체 이탈 고객 비중
+# ------------------------------------------
 st.subheader("1. 먼저 확인한 것: 이탈 고객은 얼마나 많은가?")
-left, right = st.columns([1.25, 1])
+left, right = st.columns([1.3, 1])
+
 with left:
     churn_plot = churn.copy()
     churn_plot["rate_pct"] = churn_plot["rate"] * 100
@@ -137,7 +127,8 @@ with left:
         texttemplate="%{text:.1f}%",
         textposition="outside",
     )
-    st.plotly_chart(style_chart(fig, 340), use_container_width=True)
+    st.plotly_chart(style_chart(fig, 320), use_container_width=True)
+
 with right:
     st.markdown(
         f"""
@@ -153,6 +144,10 @@ with right:
     )
 
 st.markdown("---")
+
+# ------------------------------------------
+# Section 2: 컬럼별 이탈 패턴 탐색
+# ------------------------------------------
 st.subheader("2. 컬럼별로 어떤 이탈 패턴이 보였나?")
 st.write(
     "보고 싶은 컬럼을 선택하면 값이 낮은 고객부터 높은 고객까지 구간을 나눠 이탈률을 비교합니다. "
@@ -161,6 +156,8 @@ st.write(
 
 group_order = ["고객 특성", "소비·수익", "계약 생애주기", "변화 신호"]
 available_groups = [g for g in group_order if g in catalog["feature_group"].unique()]
+
+st.caption("📌 탐색할 컬럼의 그룹 카테고리를 선택하세요:")
 selected_group = st.radio(
     "분석 주제",
     available_groups,
@@ -170,6 +167,7 @@ selected_group = st.radio(
 
 group_catalog = catalog.loc[catalog["feature_group"] == selected_group].copy()
 label_to_feature = dict(zip(group_catalog["feature_label"], group_catalog["feature"]))
+
 selected_label = st.selectbox("확인할 컬럼", list(label_to_feature))
 selected_feature = label_to_feature[selected_label]
 selected_profile = profiles.loc[profiles["feature"] == selected_feature].copy()
@@ -183,6 +181,7 @@ with chart_col:
         plot_profile(selected_profile, overall_rate, selected_label),
         use_container_width=True,
     )
+
 with insight_col:
     st.markdown("#### 이 컬럼은 무엇인가?")
     st.write(selected_description)
@@ -190,11 +189,15 @@ with insight_col:
     st.info(profile_insight(selected_profile, overall_rate))
     if selected_feature in {"channel_sales", "origin_up"}:
         st.caption(
-            "원본 데이터의 익명화된 코드값은 읽기 쉽게 빈도순 '판매 채널 1, 2…' 또는 "
+            "💡 원본 데이터의 익명화된 코드값은 읽기 쉽게 빈도순 '판매 채널 1, 2…' 또는 "
             "'유입 경로 1, 2…'로 표시했습니다. 숫자 순서 자체에 의미는 없습니다."
         )
 
 st.markdown("---")
+
+# ------------------------------------------
+# Section 3: 계약 유지 기간 x 종료 시점 교차 분석 (Heatmap)
+# ------------------------------------------
 st.subheader("3. 계약 기간과 종료 시점을 함께 보면?")
 st.write(
     "한 컬럼만 보는 대신, **계약을 얼마나 오래 유지했는지**와 "
@@ -207,6 +210,7 @@ if matrix.empty:
 else:
     tenure_order = ["1년 미만", "1~3년", "3~5년", "5년 이상"]
     end_order = ["기준일 이전", "3개월 이내", "3~12개월", "1년 초과"]
+
     rate_pivot = (
         matrix.pivot(index="tenure_band", columns="end_band", values="churn_rate")
         .reindex(index=tenure_order, columns=end_order)
@@ -215,6 +219,7 @@ else:
         matrix.pivot(index="tenure_band", columns="end_band", values="customer_count")
         .reindex(index=tenure_order, columns=end_order)
     )
+
     text = []
     for i in range(len(rate_pivot.index)):
         row = []
@@ -224,7 +229,7 @@ else:
             if pd.isna(rate):
                 row.append("")
             else:
-                row.append(f"{rate:.1%}<br>n={int(count):,}")
+                row.append(f"<b>{rate:.1%}</b><br><span style='font-size:11px;'>n={int(count):,}</span>")
         text.append(row)
 
     fig = go.Figure(
@@ -243,7 +248,7 @@ else:
         xaxis_title="계약 종료까지 남은 기간",
         yaxis_title="계약 유지 기간",
     )
-    st.plotly_chart(style_chart(fig, 430), use_container_width=True)
+    st.plotly_chart(style_chart(fig, 410), use_container_width=True)
 
     max_row = matrix.loc[matrix["churn_rate"].idxmax()]
     st.markdown(
@@ -251,15 +256,20 @@ else:
         <div class="insight-box">
         표본 30명 이상 조합 중 가장 높은 이탈률이 관찰된 구간은
         <b>계약 유지 {max_row['tenure_band']} · 종료 {max_row['end_band']}</b> 조합입니다
-        ({float(max_row['churn_rate']):.1%}, n={int(max_row['customer_count']):,}).<br>
-        이 결과는 두 계약 시점 정보가 함께 있을 때 고객군을 더 구체적으로 나눠볼 수 있음을 보여줍니다.
+        (<b>{float(max_row['churn_rate']):.1%}</b>, n={int(max_row['customer_count']):,}명).<br>
+        이 결과는 두 계약 시점 정보가 함께 있을 때 고위험 고객군을 더 명확하게 선별할 수 있음을 보여줍니다.
         </div>
         """,
         unsafe_allow_html=True,
     )
 
 st.markdown("---")
+
+# ------------------------------------------
+# Section 4: 가격 변화와 이탈률
+# ------------------------------------------
 st.subheader("4. 최근 가격 변화와 이탈률")
+
 price_candidates = {
     "에너지 가격 변화": "off_peak_energy_recent_change_rate",
     "전력 가격 변화": "off_peak_power_recent_change_rate",
@@ -267,6 +277,7 @@ price_candidates = {
 price_label = st.selectbox("가격 변화 기준", list(price_candidates))
 price_feature = price_candidates[price_label]
 price_profile = profiles.loc[profiles["feature"] == price_feature].copy()
+
 if not price_profile.empty:
     st.plotly_chart(
         plot_profile(price_profile, overall_rate, price_label),
@@ -274,11 +285,14 @@ if not price_profile.empty:
     )
     st.info(profile_insight(price_profile, overall_rate))
     st.caption(
-        "가격 변화가 이탈의 원인이라고 단정하는 그래프가 아닙니다. "
+        "💡 가격 변화가 이탈의 직접 원인이라고 단정하는 그래프가 아닙니다. "
         "가격 변화 구간별로 관찰된 이탈률 차이를 확인한 것입니다."
     )
 
-with st.expander("데이터 품질과 전처리 과정 보기"):
+# ------------------------------------------
+# Expander: 데이터 전처리 과정 요약
+# ------------------------------------------
+with st.expander("🔍 데이터 품질과 전처리 과정 자세히 보기"):
     st.markdown("#### 결측치가 많은 Feature")
     top_missing = missing.loc[missing["missing_count"] > 0].head(10).copy()
     if top_missing.empty:
@@ -293,7 +307,7 @@ with st.expander("데이터 품질과 전처리 과정 보기"):
             use_container_width=True,
         )
         st.caption(
-            "결측 행을 임의로 삭제하지 않고, 실제 모델 학습에서는 각 CV Fold 내부에서만 결측 대체를 수행합니다."
+            "💡 결측 행을 임의로 삭제하지 않고, 실제 모델 학습에서는 각 CV Fold 내부에서만 결측 대체를 수행합니다."
         )
 
     st.markdown("#### 데이터가 모델 입력으로 만들어지는 순서")
