@@ -61,58 +61,56 @@ def show_home() -> None:
     c4.metric("Top 10% Lift", f"{float(best_model_df['test_top10_lift']):.2f}배")
 
     st.markdown("---")
-    st.subheader("이 대시보드에서 보는 순서")
+    st.subheader("📌 대시보드 핵심 메뉴 안내")
 
     col_guide1, col_guide2, col_guide3 = st.columns(3)
-
-    # 1번 카드
+    # 1번 카드: 1_Dashboard.py 연동
     with col_guide1:
         with st.container(border=True):
             st.markdown(
-                "<h4 style='text-align: center; margin-bottom: 12px;'>📊 데이터 패턴 탐색</h4>",
+                "<h4 style='text-align: center; margin-bottom: 12px;'>📊 1. 고객 데이터 인사이트</h4>",
                 unsafe_allow_html=True,
             )
             st.write(
-                "전체 고객 데이터의 이탈률 분포와 주요 특성별 차이를 시각적으로 파악합니다."
+                "전체 고객 데이터의 이탈 비중과 특성(Feature) 카테고리별 패턴 및 계약 만료 교차 분석 결과를 살펴봅니다."
             )
-            st.write("")  # 세로 비율 맞춤용 여백
+            st.write("")  # 여백 맞춤용
             if st.button(
-                    "고객 데이터 인사이트 보기 ➔", key="btn_p1", use_container_width=True
+                    "데이터 인사이트 보기 ➔", key="btn_p1", use_container_width=True
             ):
                 st.switch_page("pages/1_Dashboard.py")
 
-    # 2번 카드
+    # 2번 카드: 2_Model_Performance.py 연동
     with col_guide2:
         with st.container(border=True):
             st.markdown(
-                "<h4 style='text-align: center; margin-bottom: 12px;'>🤖 모델 성능 & 유지전략</h4>",
+                "<h4 style='text-align: center; margin-bottom: 12px;'>🤖 2. 모델 성능 & 유지전략</h4>",
                 unsafe_allow_html=True,
             )
             st.write(
-                "챔피언 모델의 Lift 차트와 타겟 마케팅 시 ROI/포착률 시뮬레이션을 확인합니다."
+                "알고리즘 비교 평가, 타겟 마케팅 용량별 이탈 포착률 시뮬레이션 및 변수 개선 효과를 검증합니다."
             )
             st.write("")
             if st.button(
-                    "모델 · 유지전략 분석 보기 ➔", key="btn_p2", use_container_width=True
+                    "모델 성능 분석 보기 ➔", key="btn_p2", use_container_width=True
             ):
                 st.switch_page("pages/2_Model_Performance.py")
 
-    # 3번 카드
+    # 3번 카드: 3_Realtime_Prediction.py 연동
     with col_guide3:
         with st.container(border=True):
             st.markdown(
-                "<h4 style='text-align: center; margin-bottom: 12px;'>🎯 실시간 위험도 시뮬레이션</h4>",
+                "<h4 style='text-align: center; margin-bottom: 12px;'>🎛️ 3. 실시간 위험 시뮬레이터</h4>",
                 unsafe_allow_html=True,
             )
             st.write(
-                "개별 고객의 이탈 위험도를 조회하고 What-If 슬라이더로 조건 변화를 테스트합니다."
+                "개별 고객을 선택하고 What-If 슬라이더로 주요 핵심 조건 변경 시 위험도 변화를 실시간으로 측정합니다."
             )
             st.write("")
             if st.button(
-                    "고객 위험 분석 실행 ➔", key="btn_p3", use_container_width=True
+                    "위험 시뮬레이션 실행 ➔", key="btn_p3", use_container_width=True
             ):
                 st.switch_page("pages/3_Realtime_Prediction.py")
-
 
 pg = get_app_navigation(show_home)
 pg.run()
