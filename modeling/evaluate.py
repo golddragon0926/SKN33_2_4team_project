@@ -35,6 +35,8 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib import font_manager
 from sklearn.metrics import (
     average_precision_score,
     confusion_matrix,
@@ -553,6 +555,489 @@ def _export_evaluation_artifacts(
     )
 
     return artifacts_dir
+
+
+
+def _configure_matplotlib_korean_font() -> None:
+    """
+    보고서용 PNG에서 한글이 깨지지 않도록 사용 가능한 한글 폰트를 설정한다.
+    Windows에서는 맑은 고딕을 우선 사용하고, 그 외 환경에서는 설치된 후보를 탐색한다.
+    """
+    font_candidates = [
+        Path("C:/Windows/Fonts/malgun.ttf"),
+        Path("C:/Windows/Fonts/malgunbd.ttf"),
+        Path("/System/Library/Fonts/AppleSDGothicNeo.ttc"),
+        Path("/usr/share/fonts/truetype/nanum/NanumBarunGothic.ttf"),
+        Path("/usr/share/fonts/truetype/nanum/NanumGothic.ttf"),
+    ]
+
+    for path in font_candidates:
+        if path.exists():
+            try:
+                font_manager.fontManager.addfont(str(path))
+                font_name = font_manager.FontProperties(
+                    fname=str(path)
+                ).get_name()
+                plt.rcParams["font.family"] = font_name
+                break
+            except Exception:
+                continue
+
+    plt.rcParams["axes.unicode_minus"] = False
+
+
+def _save_report_figure(
+    output_dir: Path,
+    filename: str,
+) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(
+        output_dir / filename,
+        dpi=180,
+        bbox_inches="tight",
+    )
+    plt.close()
+
+
+def _export_modeling_report_images(
+    root: Path,
+    comparison: pd.DataFrame,
+    champion: str,
+    test_result: dict[str, Any] | None,
+    predictions: pd.DataFrame | None,
+) -> Path:
+    """
+    인공지능 모델 학습 보고서에서 참조하는 PNG를
+    docs/images/modeling_report/ 경로에 직접 저장한다.
+
+    생성 파일
+    01_oof_pr_auc_comparison.png
+    02_oof_top10_lift.png
+    03_test_pr_curve.png
+    04_test_roc_curve.png
+    05_confusion_matrix.png
+    06_test_topk_capture.png
+    07_probability_distribution.png
+    08_test_metric_summary.png
+    """
+    _configure_matplotlib_korean_font()
+
+    output_dir = (
+        root
+        / "docs"
+        / "images"
+        / "modeling_report"
+    )
+    output_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    # 1. 모델별 OOF PR-AUC
+    plot_df = (
+        comparison
+        .sort_values("oof_pr_auc", ascending=True)
+        .copy()
+    )
+    labels = [
+        DISPLAY_NAMES.get(model, model)
+        for model in plot_df["model"]
+    ]
+
+    plt.figure(figsize=(8.0, 4.8))
+    bars = plt.barh(
+        labels,
+        plot_df["oof_pr_auc"],
+    )
+    plt.title("모델별 OOF PR-AUC")
+    plt.xlabel("PR-AUC")
+    xmax = max(
+        float(plot_df["oof_pr_auc"].max()) * 1.18,
+        0.12,
+    )
+    plt.xlim(0, xmax)
+    for bar, value in zip(
+        bars,
+        plot_df["oof_pr_auc"],
+    ):
+        plt.text(
+            float(value) + xmax * 0.015,
+            bar.get_y() + bar.get_height() / 2,
+            f"{float(value):.3f}",
+            va="center",
+            fontsize=9,
+        )
+    plt.grid(axis="x", alpha=0.2)
+    _save_report_figure(
+        output_dir,
+        "01_oof_pr_auc_comparison.png",
+    )
+
+    # 2. 모델별 OOF Top 10% Lift
+    plot_df = (
+        comparison
+        .sort_values("top10_lift", ascending=True)
+        .copy()
+    )
+    labels = [
+        DISPLAY_NAMES.get(model, model)
+        for model in plot_df["model"]
+    ]
+
+    plt.figure(figsize=(8.0, 4.8))
+    bars = plt.barh(
+        labels,
+        plot_df["top10_lift"],
+    )
+    plt.title("모델별 OOF Top 10% Lift")
+    plt.xlabel("Lift")
+    plt.axvline(
+        1.0,
+        linestyle="--",
+        linewidth=1,
+        label="무작위 기준 = 1",
+    )
+    xmax = max(
+        float(plot_df["top10_lift"].max()) * 1.18,
+        1.2,
+    )
+    plt.xlim(0, xmax)
+    for bar, value in zip(
+        bars,
+        plot_df["top10_lift"],
+    ):
+        plt.text(
+            float(value) + xmax * 0.015,
+            bar.get_y() + bar.get_height() / 2,
+            f"{float(value):.2f}",
+            va="center",
+            fontsize=9,
+        )
+    plt.legend(frameon=False)
+    plt.grid(axis="x", alpha=0.2)
+    _save_report_figure(
+        output_dir,
+        "02_oof_top10_lift.png",
+    )
+
+    # Test 결과가 없으면 OOF 비교 이미지만 저장
+    if (
+        test_result is None
+        or predictions is None
+        or predictions.empty
+    ):
+        return output_dir
+
+    y_true = (
+        predictions["y_true"]
+        .astype(int)
+        .to_numpy()
+    )
+    proba = (
+        predictions["predicted_probability"]
+        .astype(float)
+        .to_numpy()
+    )
+
+    # 3. Test PR Curve
+    precision, recall, _ = precision_recall_curve(
+        y_true,
+        proba,
+    )
+    prevalence = float(
+        np.mean(y_true)
+    )
+
+    plt.figure(figsize=(7.2, 5.2))
+    plt.plot(
+        recall,
+        precision,
+        linewidth=2,
+        label=(
+            f"{DISPLAY_NAMES.get(champion, champion)} "
+            f"(PR-AUC={float(test_result['test_pr_auc']):.3f})"
+        ),
+    )
+    plt.axhline(
+        prevalence,
+        linestyle="--",
+        linewidth=1,
+        label=f"기준선={prevalence:.3f}",
+    )
+    plt.title("최종 Test Precision-Recall Curve")
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.xlim(0, 1)
+    plt.ylim(0, 1)
+    plt.legend(frameon=False)
+    plt.grid(alpha=0.2)
+    _save_report_figure(
+        output_dir,
+        "03_test_pr_curve.png",
+    )
+
+    # 4. Test ROC Curve
+    fpr, tpr, _ = roc_curve(
+        y_true,
+        proba,
+    )
+
+    plt.figure(figsize=(7.2, 5.2))
+    plt.plot(
+        fpr,
+        tpr,
+        linewidth=2,
+        label=(
+            f"{DISPLAY_NAMES.get(champion, champion)} "
+            f"(ROC-AUC={float(test_result['test_roc_auc']):.3f})"
+        ),
+    )
+    plt.plot(
+        [0, 1],
+        [0, 1],
+        linestyle="--",
+        linewidth=1,
+        label="무작위 기준",
+    )
+    plt.title("최종 Test ROC Curve")
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.xlim(0, 1)
+    plt.ylim(0, 1)
+    plt.legend(frameon=False)
+    plt.grid(alpha=0.2)
+    _save_report_figure(
+        output_dir,
+        "04_test_roc_curve.png",
+    )
+
+    # 5. Confusion Matrix
+    matrix = np.array(
+        [
+            [
+                int(test_result["tn"]),
+                int(test_result["fp"]),
+            ],
+            [
+                int(test_result["fn"]),
+                int(test_result["tp"]),
+            ],
+        ]
+    )
+
+    plt.figure(figsize=(5.4, 4.8))
+    plt.imshow(matrix)
+    plt.title("최종 Test Confusion Matrix")
+    plt.xticks(
+        [0, 1],
+        ["예측 유지(0)", "예측 이탈(1)"],
+    )
+    plt.yticks(
+        [0, 1],
+        ["실제 유지(0)", "실제 이탈(1)"],
+    )
+    for i in range(2):
+        for j in range(2):
+            plt.text(
+                j,
+                i,
+                f"{matrix[i, j]:,}",
+                ha="center",
+                va="center",
+                fontsize=14,
+            )
+    plt.xlabel("Predicted")
+    plt.ylabel("Actual")
+    plt.colorbar(
+        fraction=0.046,
+        pad=0.04,
+    )
+    _save_report_figure(
+        output_dir,
+        "05_confusion_matrix.png",
+    )
+
+    # 6. Top-K Capture Curve
+    ranked = (
+        predictions
+        .sort_values(
+            "predicted_probability",
+            ascending=False,
+        )
+        .reset_index(drop=True)
+    )
+    total_positive = float(
+        ranked["y_true"].sum()
+    )
+
+    percentages = np.arange(1, 101)
+    captures: list[float] = []
+
+    for pct in percentages:
+        k = int(
+            np.ceil(
+                len(ranked)
+                * pct
+                / 100
+            )
+        )
+        captured = float(
+            ranked
+            .head(k)["y_true"]
+            .sum()
+        )
+        captures.append(
+            captured / total_positive
+            if total_positive
+            else 0.0
+        )
+
+    plt.figure(figsize=(7.2, 5.2))
+    plt.plot(
+        percentages,
+        captures,
+        linewidth=2,
+        label="모델",
+    )
+    plt.plot(
+        percentages,
+        percentages / 100,
+        linestyle="--",
+        linewidth=1,
+        label="무작위",
+    )
+    top10_capture = captures[9]
+    plt.scatter(
+        [10],
+        [top10_capture],
+        s=45,
+    )
+    plt.annotate(
+        f"Top 10%: {top10_capture * 100:.1f}%",
+        xy=(10, top10_capture),
+        xytext=(
+            18,
+            min(
+                top10_capture + 0.13,
+                0.9,
+            ),
+        ),
+        arrowprops={
+            "arrowstyle": "->"
+        },
+    )
+    plt.title("고위험 상위 고객 비율별 이탈자 포착률")
+    plt.xlabel("관리 대상 상위 고객 비율 (%)")
+    plt.ylabel("전체 이탈자 포착률")
+    plt.xlim(0, 100)
+    plt.ylim(0, 1)
+    plt.legend(frameon=False)
+    plt.grid(alpha=0.2)
+    _save_report_figure(
+        output_dir,
+        "06_test_topk_capture.png",
+    )
+
+    # 7. 예측확률 분포
+    plt.figure(figsize=(7.5, 5.0))
+    plt.hist(
+        predictions.loc[
+            predictions["y_true"] == 0,
+            "predicted_probability",
+        ],
+        bins=35,
+        alpha=0.55,
+        label="실제 유지(0)",
+        density=True,
+    )
+    plt.hist(
+        predictions.loc[
+            predictions["y_true"] == 1,
+            "predicted_probability",
+        ],
+        bins=35,
+        alpha=0.55,
+        label="실제 이탈(1)",
+        density=True,
+    )
+    plt.axvline(
+        float(
+            test_result[
+                "fixed_oof_f1_threshold"
+            ]
+        ),
+        linestyle="--",
+        linewidth=1.5,
+        label=(
+            "OOF 임계값="
+            f"{float(test_result['fixed_oof_f1_threshold']):.3f}"
+        ),
+    )
+    plt.title("Test 예측확률 분포")
+    plt.xlabel("예측 이탈확률")
+    plt.ylabel("밀도")
+    plt.legend(frameon=False)
+    plt.grid(
+        axis="y",
+        alpha=0.2,
+    )
+    _save_report_figure(
+        output_dir,
+        "07_probability_distribution.png",
+    )
+
+    # 8. Test Metric Summary
+    metric_names = [
+        "PR-AUC",
+        "ROC-AUC",
+        "Precision",
+        "Recall",
+        "F1",
+    ]
+    metric_values = [
+        float(test_result["test_pr_auc"]),
+        float(test_result["test_roc_auc"]),
+        float(test_result["test_precision"]),
+        float(test_result["test_recall"]),
+        float(test_result["test_f1"]),
+    ]
+
+    plt.figure(figsize=(7.2, 4.8))
+    bars = plt.bar(
+        metric_names,
+        metric_values,
+    )
+    plt.title(
+        f"최종 {DISPLAY_NAMES.get(champion, champion)} Test 성능"
+    )
+    ymax = max(
+        max(metric_values) * 1.22,
+        0.8,
+    )
+    plt.ylim(0, ymax)
+    for bar, value in zip(
+        bars,
+        metric_values,
+    ):
+        plt.text(
+            bar.get_x() + bar.get_width() / 2,
+            float(value) + ymax * 0.02,
+            f"{float(value):.3f}",
+            ha="center",
+            fontsize=9,
+        )
+    plt.ylabel("Score")
+    plt.grid(
+        axis="y",
+        alpha=0.2,
+    )
+    _save_report_figure(
+        output_dir,
+        "08_test_metric_summary.png",
+    )
+
+    return output_dir
 
 
 
@@ -1431,6 +1916,15 @@ def main() -> None:
         predictions=predictions,
     )
     print(f"평가 Artifact 저장 완료: {evaluation_artifact_dir}")
+
+    report_image_dir = _export_modeling_report_images(
+        root=root,
+        comparison=comparison,
+        champion=champion,
+        test_result=test_result,
+        predictions=predictions,
+    )
+    print(f"모델링 보고서 이미지 저장 완료: {report_image_dir}")
 
     print(
         f"\n저장 완료: {comparison_path}"
