@@ -98,6 +98,82 @@ def _configure_korean_font() -> str | None:
 KOREAN_FONT_NAME = _configure_korean_font()
 
 
+def _build_raw_eda_summaries(client: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    """원본 고객 데이터만으로 확인할 수 있는 핵심 이탈 패턴 3가지를 집계한다."""
+    work = client.copy()
+
+    # 1) 고객 유지 연차 구간별 이탈률
+    tenure_labels = ["3년 이하", "4년", "5년", "6년", "7년 이상"]
+    tenure_group = pd.cut(
+        pd.to_numeric(work["num_years_antig"], errors="coerce"),
+        bins=[-np.inf, 3, 4, 5, 6, np.inf],
+        labels=tenure_labels,
+    )
+    tenure = (
+        work.assign(segment=tenure_group)
+        .dropna(subset=["segment"])
+        .groupby("segment", observed=False)[TARGET_COL]
+        .agg(customer_count="size", churn_rate="mean")
+        .reset_index()
+    )
+    tenure["segment"] = tenure["segment"].astype(str)
+
+    # 2) 전력 계약 순마진 사분위별 이탈률
+    margin_work = work[["margin_net_pow_ele", TARGET_COL]].copy()
+    margin_work["margin_net_pow_ele"] = pd.to_numeric(
+        margin_work["margin_net_pow_ele"], errors="coerce"
+    )
+    margin_work = margin_work.dropna(subset=["margin_net_pow_ele"])
+    margin_labels = ["하위 25%", "25~50%", "50~75%", "상위 25%"]
+    # 동일값이 많아 qcut 경계가 겹치는 경우에도 4개 그룹을 안정적으로 만들기 위해 rank 사용
+    ranked_margin = margin_work["margin_net_pow_ele"].rank(method="first")
+    margin_work["segment"] = pd.qcut(
+        ranked_margin,
+        q=4,
+        labels=margin_labels,
+    )
+    margin = (
+        margin_work.groupby("segment", observed=False)[TARGET_COL]
+        .agg(customer_count="size", churn_rate="mean")
+        .reset_index()
+    )
+    margin["segment"] = margin["segment"].astype(str)
+
+    # 3) 가스 상품 보유 여부별 이탈률
+    gas_map = {
+        "t": "가스 상품 보유",
+        "true": "가스 상품 보유",
+        "1": "가스 상품 보유",
+        "f": "가스 상품 미보유",
+        "false": "가스 상품 미보유",
+        "0": "가스 상품 미보유",
+    }
+    gas_segment = (
+        work["has_gas"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+        .map(gas_map)
+        .fillna("기타/미확인")
+    )
+    gas = (
+        work.assign(segment=gas_segment)
+        .groupby("segment", observed=False)[TARGET_COL]
+        .agg(customer_count="size", churn_rate="mean")
+        .reset_index()
+    )
+    gas_order = ["가스 상품 미보유", "가스 상품 보유", "기타/미확인"]
+    gas["segment"] = pd.Categorical(gas["segment"], categories=gas_order, ordered=True)
+    gas = gas.sort_values("segment").dropna(subset=["segment"]).reset_index(drop=True)
+    gas["segment"] = gas["segment"].astype(str)
+
+    return {
+        "tenure": tenure,
+        "margin": margin,
+        "gas": gas,
+    }
+
+
 
 def _save_eda_artifact(df: pd.DataFrame, path: Path) -> None:
     """EDA 결과를 artifacts/eda 아래 CSV로 저장한다."""
@@ -191,6 +267,20 @@ def _export_base_eda_artifacts(
         )
     _save_eda_artifact(raw_missing, out_dir / "raw_missing_values.csv")
 
+    raw_eda = _build_raw_eda_summaries(client)
+    _save_eda_artifact(
+        raw_eda["tenure"],
+        out_dir / "raw_tenure_churn_summary.csv",
+    )
+    _save_eda_artifact(
+        raw_eda["margin"],
+        out_dir / "raw_margin_churn_summary.csv",
+    )
+    _save_eda_artifact(
+        raw_eda["gas"],
+        out_dir / "raw_gas_churn_summary.csv",
+    )
+
     flow = pd.DataFrame(
         {
             "step": [1, 2, 3, 4, 5],
@@ -270,8 +360,69 @@ def _save_base_report_figures(
         )
     _save_figure(fig, image_dir / "01_churn_distribution.png")
 
+    # 2-a. 원본 고객 유지 연차 구간별 이탈률
+    raw_eda = _build_raw_eda_summaries(client)
+    tenure = raw_eda["tenure"]
+    fig, ax = plt.subplots(figsize=(8, 4.8))
+    bars = ax.bar(tenure["segment"], tenure["churn_rate"] * 100)
+    ax.set_title("고객 유지 연차 구간별 이탈률")
+    ax.set_ylabel("이탈률(%)")
+    ax.set_xlabel("")
+    ymax = max(float((tenure["churn_rate"] * 100).max()) * 1.22, 1.0)
+    ax.set_ylim(0, ymax)
+    for bar, value in zip(bars, tenure["churn_rate"] * 100):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            f"{value:.1f}%",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+    _save_figure(fig, image_dir / "02a_tenure_years_churn_rate.png")
 
-    # 2. Train/Test 타깃 비율 비교
+    # 2-b. 원본 전력 계약 순마진 사분위별 이탈률
+    margin = raw_eda["margin"]
+    fig, ax = plt.subplots(figsize=(8, 4.8))
+    bars = ax.bar(margin["segment"], margin["churn_rate"] * 100)
+    ax.set_title("전력 계약 순마진 구간별 이탈률")
+    ax.set_ylabel("이탈률(%)")
+    ax.set_xlabel("")
+    ymax = max(float((margin["churn_rate"] * 100).max()) * 1.22, 1.0)
+    ax.set_ylim(0, ymax)
+    for bar, value in zip(bars, margin["churn_rate"] * 100):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            f"{value:.1f}%",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+    _save_figure(fig, image_dir / "02b_margin_net_churn_rate.png")
+
+    # 2-c. 원본 가스 상품 보유 여부별 이탈률
+    gas = raw_eda["gas"]
+    fig, ax = plt.subplots(figsize=(7.5, 4.8))
+    bars = ax.bar(gas["segment"], gas["churn_rate"] * 100)
+    ax.set_title("가스 상품 보유 여부별 이탈률")
+    ax.set_ylabel("이탈률(%)")
+    ax.set_xlabel("")
+    ymax = max(float((gas["churn_rate"] * 100).max()) * 1.22, 1.0)
+    ax.set_ylim(0, ymax)
+    for bar, value in zip(bars, gas["churn_rate"] * 100):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            f"{value:.1f}%",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+        )
+    _save_figure(fig, image_dir / "02c_has_gas_churn_rate.png")
+
+
+    # 3. Train/Test 타깃 비율 비교
     split_rates = pd.Series(
         {
             "Train": float(train_client[TARGET_COL].mean()),

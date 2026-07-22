@@ -40,8 +40,8 @@
     "modification_after_reference"
   ],
   "feature_count": 37,
-  "threshold": 0.1305258102525069,
-  "top10_cutoff": 0.1759764595963619,
+  "threshold": 0.102939807122633,
+  "top10_cutoff": 0.17380796149795086,
   "id_column": "id",
   "target_column": "churn",
   "categorical_features": [
