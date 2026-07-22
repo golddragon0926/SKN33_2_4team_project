@@ -1,9 +1,8 @@
 import sys
-from pathlib import Path
-import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+
+from typing import Literal
 
 # 1. common 패키지 및 시뮬레이터 전용 함수 import
 from common import (
@@ -33,19 +32,18 @@ inject_common_css()
 
 # 카탈로그 한글 사전
 FALLBACK_LABELS = {
-    "margin_net_pow_ele": "VIP 수익 기여도 (전력 순마진)",
+    "margin_net_pow_ele": "전력 계약 순마진",
     "margin_gross_pow_ele": "전력 공급 총마진",
-    "forecast_meter_rent_12m": "연간 예상 계량기 대여료",
-    "net_margin": "고객 전체 순마진",
-    "cons_12m": "최근 12개월 전력 소비량",
+    "forecast_meter_rent_12m": "예측 계량기 임대료",
+    "net_margin": "고객 순마진",
+    "cons_12m": "최근 12개월 전기 소비량",
     "cons_gas_12m": "최근 12개월 가스 소비량",
-    "cons_last_month": "지난달 전력 소비량",
-    "forecast_cons_12m": "향후 12개월 예상 소비량",
-    "forecast_discount_energy": "예상 에너지 할인액",
-    "num_years_antig": "가입 유지 기간(년)",
+    "cons_last_month": "최근 1개월 전기 소비량",
+    "forecast_cons_12m": "향후 12개월 예측 소비량",
+    "forecast_discount_energy": "예측 에너지 할인 수준",
+    "num_years_antig": "고객 유지 연차",
     "tenure_months": "가입 유지 기간(월)",
 }
-
 
 @st.cache_resource
 def load_prediction_metadata() -> dict:
@@ -77,21 +75,21 @@ except Exception as exc:
 # ------------------------------------------
 st.subheader("1. 시뮬레이션 대상 고객 선택")
 customer_ids = test_df["id"].astype(str).tolist()
-selected_id = st.selectbox("📌 **시뮬레이션을 진행할 고객 ID 선택**", customer_ids)
+selected_id = st.selectbox("📌 **시뮬레이션을 진행할 기업 고객 ID 선택**", customer_ids)
 
 original_customer = test_df.loc[test_df["id"].astype(str) == selected_id].copy()
 feature_cols = list(metadata["feature_names"])
 
 # 원본 상태 예측
 try:
-    orig_pred = predict_customer(
+    orig_pred: dict = predict_customer(
         input_df=original_customer[feature_cols], project_root=PROJECT_ROOT
     )
     orig_score = float(orig_pred["risk_score"])
     orig_group = str(orig_pred["risk_group"])
     orig_icon = str(orig_pred["risk_icon"])
     orig_top_pct = float(orig_pred.get("top_percent", 50.0))
-except Exception as exc:
+except Exception as exc: # noqa
     st.error("🚨 모델 예측 중 오류가 발생했습니다.")
     st.stop()
 
@@ -194,13 +192,15 @@ st.caption(
 )
 
 score_diff = sim_score - orig_score
-diff_color = (
+diff_color: Literal["normal", "inverse", "off"] = (
     "normal"
     if abs(score_diff) < 0.001
     else ("inverse" if score_diff > 0 else "normal")
 )
 
 # 그룹 변화에 따른 델타 문구 생성
+group_delta_color: Literal["normal", "inverse", "off"]
+
 if orig_group == sim_group:
     group_delta = f"{orig_icon} {sim_group} (상위 {sim_top_pct:.1f}%)"
     group_delta_color = "off"

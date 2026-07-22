@@ -1,4 +1,3 @@
-import pandas as pd
 import streamlit as st
 
 from common import (
@@ -18,22 +17,7 @@ st.set_page_config(
 inject_common_css()
 
 
-def get_app_navigation(show_home_func):
-    return st.navigation(
-        {
-            "MAIN": [
-                st.Page(show_home_func, title="홈", icon="🏠")
-            ],
-            "ANALYSIS": [
-                st.Page("pages/1_Dashboard.py", title="고객 데이터 인사이트", icon="📊"),
-                st.Page("pages/2_Model_Performance.py", title="모델 성능 평가", icon="🤖"),
-                st.Page("pages/3_Realtime_Prediction.py", title="실시간 예측 & 마케팅 전략", icon="🎯"),
-            ],
-        }
-    )
-
-
-def show_home() -> None:
+def show_home():
     st.title("⚡ PowerCo 고객 이탈 분석")
     st.write(
         "데이터에서 이탈 패턴을 찾고, 여러 모델을 비교한 뒤, "
@@ -114,6 +98,19 @@ def show_home() -> None:
             ):
                 st.switch_page("pages/3_Realtime_Prediction.py")
 
+def get_app_navigation(show_home_func):
+    return st.navigation(
+        {
+            "MAIN": [
+                st.Page(show_home_func, title="홈", icon="🏠")
+            ],
+            "ANALYSIS": [
+                st.Page("pages/1_Dashboard.py", title="고객 데이터 인사이트", icon="📊"),
+                st.Page("pages/2_Model_Performance.py", title="모델 성능 평가", icon="🤖"),
+                st.Page("pages/3_Realtime_Prediction.py", title="실시간 예측 & 마케팅 전략", icon="🎯"),
+            ],
+        }
+    )
 
 pg = get_app_navigation(show_home)
 pg.run()

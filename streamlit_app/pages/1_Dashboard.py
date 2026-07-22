@@ -1,5 +1,3 @@
-from pathlib import Path
-import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -19,13 +17,13 @@ from common import (
 inject_common_css()
 
 
-def profile_insight(profile: pd.DataFrame, overall_rate: float) -> str:
+def profile_insight(profile: pd.DataFrame, base_rate: float) -> str:
     valid = profile.loc[profile["customer_count"] >= 30].copy()
     if valid.empty:
         valid = profile.copy()
     high = valid.loc[valid["churn_rate"].idxmax()]
     low = valid.loc[valid["churn_rate"].idxmin()]
-    delta = (float(high["churn_rate"]) - overall_rate) * 100
+    delta = (float(high["churn_rate"]) - base_rate) * 100
     return (
         f"관찰된 이탈률이 가장 높은 구간은 **{high['bucket']}** "
         f"({float(high['churn_rate']):.1%}, n={int(high['customer_count']):,})입니다. "
@@ -34,10 +32,11 @@ def profile_insight(profile: pd.DataFrame, overall_rate: float) -> str:
     )
 
 
-def plot_profile(profile: pd.DataFrame, overall_rate: float, title: str):
+def plot_profile(profile: pd.DataFrame, base_rate: float, title: str):
     plot_df = profile.sort_values("bucket_order").copy()
     plot_df["churn_pct"] = plot_df["churn_rate"] * 100
-    fig = px.bar(
+
+    chart = px.bar(
         plot_df,
         x="bucket",
         y="churn_pct",
@@ -46,7 +45,7 @@ def plot_profile(profile: pd.DataFrame, overall_rate: float, title: str):
         title=title,
         labels={"bucket": "", "churn_pct": "이탈률 (%)"},
     )
-    fig.update_traces(
+    chart.update_traces(
         marker_color=NAVY,
         texttemplate="%{text:.1f}%",
         textposition="outside",
@@ -58,14 +57,14 @@ def plot_profile(profile: pd.DataFrame, overall_rate: float, title: str):
             "이탈률: %{y:.1f}%<extra></extra>"
         ),
     )
-    fig.add_hline(
-        y=overall_rate * 100,
+    chart.add_hline(
+        y=base_rate * 100,
         line_dash="dash",
         line_color=ORANGE,
-        annotation_text=f"전체 {overall_rate:.1%}",
+        annotation_text=f"전체 {base_rate:.1%}",
         annotation_position="top right",
     )
-    return style_chart(fig)
+    return style_chart(chart)
 
 
 # ==========================================
@@ -241,7 +240,7 @@ else:
             text=text,
             texttemplate="%{text}",
             colorscale=[[0, "#eef3f7"], [1, ORANGE]],
-            colorbar_title="이탈률 %",
+            colorbar=dict(title="이탈률 %"),
             hovertemplate="계약 유지: %{y}<br>계약 종료: %{x}<br>이탈률: %{z:.1f}%<extra></extra>",
         )
     )
