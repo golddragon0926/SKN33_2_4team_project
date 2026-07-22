@@ -65,6 +65,13 @@
 
 ## 📊 5. 데이터셋 및 피처 엔지니어링 (Data & Feature Engineering)
 
+### 데이터 출처
+
+| 항목 | 내용 |
+| :--- | :--- |
+| 데이터셋 | BCG × Forage PowerCo 가상 데이터 |
+| 출처 URL | [Kaggle - PowerCo](https://www.kaggle.com/datasets/erolmasimov/powerco) |
+
 ### 데이터 구성
 
 | 데이터 | 규모 | 설명 |
@@ -296,6 +303,31 @@ python -m streamlit run streamlit_app/app.py
 | **🤖 모델 성능 평가** | 후보 알고리즘 비교, PR Curve, OOF·Test 성능, Top-K 포착 효율, Feature Engineering 개선 효과 및 Feature Importance |
 | **🎯 실시간 예측 & 마케팅 전략** | 개별 고객사 What-If 시뮬레이션, 상대적 위험 순위 확인 및 Top 5%·5–10%·10–20%별 Pilot 대응 전략 안내 |
 
+### Streamlit 실행 화면
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <strong>홈</strong><br>
+      <img src="docs/images/streamlit/00_home.png" alt="PowerCo 고객 이탈 분석 홈 화면" width="100%">
+    </td>
+    <td width="50%" align="center">
+      <strong>고객 데이터 인사이트</strong><br>
+      <img src="docs/images/streamlit/01_customer_insights.png" alt="고객 데이터 인사이트 화면" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <strong>AI 모델 성능 평가 및 검증</strong><br>
+      <img src="docs/images/streamlit/02_model_performance.png" alt="AI 모델 성능 평가 및 검증 화면" width="100%">
+    </td>
+    <td width="50%" align="center">
+      <strong>실시간 예측 및 마케팅 전략</strong><br>
+      <img src="docs/images/streamlit/03_realtime_prediction.png" alt="실시간 예측 및 마케팅 전략 화면" width="100%">
+    </td>
+  </tr>
+</table>
+
 ---
 
 ## 📂 10. 디렉토리 구조 (Directory Structure)
@@ -337,7 +369,8 @@ project/
 │   ├── business_application.md
 │   └── images/
 │       ├── preprocessing_report/
-│       └── modeling_report/
+│       ├── modeling_report/
+│       └── streamlit/
 └── streamlit_app/
     ├── app.py
     ├── common/                  # 경로·데이터 로딩·공통 UI 모듈
@@ -362,11 +395,9 @@ project/
 
 ## ⚠️ 12. 한계 및 향후 과제 (Limitations)
 
-- 계약 날짜 피처가 실제 운영 예측 시점에 사용 가능한 정보인지 원천 시스템 검증 필요
-- 위험도 점수를 실제 확률로 해석하려면 Probability Calibration 필요
-- 실제 고객사 가치와 캠페인 비용 데이터를 이용한 ROI 검증 필요
-- A/B Test 또는 Uplift Modeling을 통한 고객사별 개입 효과 측정 필요
-- 실제 운영 데이터의 분포 변화를 감시하고 주기적으로 모델 재학습 필요
+1. **데이터 범위 제한**: 활용 가능한 데이터가 계약·소비·가격 정보 중심이므로 고객 만족도와 경쟁사 정보 등 이탈 요인을 충분히 반영하지 못했습니다. 향후 고객 행동 및 외부 데이터를 추가해 피처 범위를 확장할 필요가 있습니다.
+2. **이탈 고객사 포착 한계**: 최종 Recall은 45.1%로 실제 이탈 고객사의 절반 이상을 포착하지 못했습니다. 추가 피처 확보와 모델 개선을 진행하고, 캠페인 비용과 관리 가능 고객사 수를 함께 고려해 운영 기준을 최적화해야 합니다.
+3. **캠페인 효과 미검증**: 고위험 고객사의 우선순위는 제시했지만 실제 캠페인이 이탈 감소로 이어지는지는 검증하지 못했습니다. 실제 캠페인 결과와 연계한 A/B Test 또는 Uplift Modeling으로 개입 효과를 검증해야 합니다.
 
 ---
 
