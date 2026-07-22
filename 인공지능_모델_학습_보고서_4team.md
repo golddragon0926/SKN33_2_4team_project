@@ -315,6 +315,31 @@ LightGBM의 OOF Top 10% Lift는 **3.28배**였다.
 
 즉 LightGBM은 전체적인 이탈확률 순위화와 실제 고위험 고객 집중 선별 측면에서 가장 적합한 모델이었다.
 
+### 8.1 최종 LightGBM Feature Importance
+
+최종 Champion으로 선정된 LightGBM이 예측 과정에서 어떤 Feature를 상대적으로 많이 활용했는지 확인하기 위해 **Gain 기준 Feature Importance**를 산출했다.
+
+LightGBM의 Gain Importance는 각 Feature가 Tree 분할에 사용되면서 손실을 얼마나 개선했는지를 누적한 값이다. 본 프로젝트에서는 One-Hot Encoding과 Missing Indicator 등으로 변환된 Feature 중요도를 다시 **원본 Feature 단위로 합산**한 뒤, 전체 Gain 대비 비율(`importance_pct`)로 변환했다.
+
+전체 37개 Feature 중 상위 6개를 다음과 같이 시각화했다.
+
+![LightGBM Feature Importance Top 6](docs/images/modeling_report/09_lightgbm_top6_feature_importance.png)
+
+전체 변수 중요도는 다음 Artifact로 함께 저장한다.
+
+```text
+artifacts/lightgbm_feature_importance.csv
+```
+
+해석 시 다음 사항에 주의한다.
+
+- 중요도가 높을수록 최종 LightGBM이 해당 Feature를 분할 개선에 상대적으로 많이 활용했다는 의미다.
+- Feature Importance는 **예측에 대한 활용도**를 나타내며, 해당 Feature가 고객 이탈의 직접적인 원인이라는 의미는 아니다.
+- 서로 유사하거나 상관된 Feature가 여러 개 존재하면 중요도가 분산될 수 있다.
+- 개별 고객의 위험도에 특정 Feature가 어떤 방향으로 작용했는지는 전역 Feature Importance만으로 판단할 수 없으며, 별도의 고객별 기여도 분석이 필요하다.
+
+따라서 본 분석에서는 Top 6 Feature를 최종 모델의 주요 예측 신호를 이해하는 참고 지표로 활용하고, 인과관계로 해석하지 않는다.
+
 ---
 
 ## 9. 임계값 결정

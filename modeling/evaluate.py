@@ -620,6 +620,7 @@ def _export_modeling_report_images(
     06_test_topk_capture.png
     07_probability_distribution.png
     08_test_metric_summary.png
+    09_lightgbm_top6_feature_importance.png
     """
     _configure_matplotlib_korean_font()
 
@@ -721,7 +722,62 @@ def _export_modeling_report_images(
         "02_oof_top10_lift.png",
     )
 
-    # Test 결과가 없으면 OOF 비교 이미지만 저장
+    # 3. 최종 LightGBM Gain 기준 Feature Importance Top 6
+    # _export_evaluation_artifacts()에서 전체 중요도 CSV를 먼저 생성하지만,
+    # 단독 호출 상황에서도 안전하게 한 번 더 생성 여부를 확인한다.
+    importance_path = (
+        root
+        / "artifacts"
+        / "lightgbm_feature_importance.csv"
+    )
+    if champion == "lightgbm" and not importance_path.exists():
+        _export_feature_importance(
+            root=root,
+            champion=champion,
+            artifacts_dir=root / "artifacts",
+        )
+
+    if champion == "lightgbm" and importance_path.exists():
+        importance = pd.read_csv(importance_path)
+        required_cols = {"feature_label", "importance_pct"}
+        if required_cols.issubset(importance.columns) and not importance.empty:
+            top6 = (
+                importance
+                .sort_values("importance_pct", ascending=False)
+                .head(6)
+                .sort_values("importance_pct", ascending=True)
+            )
+
+            plt.figure(figsize=(8.4, 5.2))
+            bars = plt.barh(
+                top6["feature_label"],
+                top6["importance_pct"],
+            )
+            plt.title("최종 LightGBM Feature Importance Top 6")
+            plt.xlabel("Gain Importance (%)")
+            xmax = max(
+                float(top6["importance_pct"].max()) * 1.20,
+                1.0,
+            )
+            plt.xlim(0, xmax)
+            for bar, value in zip(
+                bars,
+                top6["importance_pct"],
+            ):
+                plt.text(
+                    float(value) + xmax * 0.015,
+                    bar.get_y() + bar.get_height() / 2,
+                    f"{float(value):.1f}%",
+                    va="center",
+                    fontsize=9,
+                )
+            plt.grid(axis="x", alpha=0.2)
+            _save_report_figure(
+                output_dir,
+                "09_lightgbm_top6_feature_importance.png",
+            )
+
+    # Test 결과가 없으면 OOF 비교 + Feature Importance 이미지만 저장
     if (
         test_result is None
         or predictions is None
